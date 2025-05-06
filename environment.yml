@@ -1,0 +1,16 @@
+name: llm_develop
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.9
+  - pip
+  - jupyter
+  - pandas
+  - numpy
+  - matplotlib
+  - scikit-learn
+  - pip:
+    - openai
+    - langchain
+    - python-dotenv
