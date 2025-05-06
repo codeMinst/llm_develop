@@ -3,10 +3,10 @@
 """
 import logging
 from typing import List, Dict, Optional
-from langchain.schema import Document
+from langchain.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from ..config.settings import EMBEDDING_MODEL, VECTORSTORE_PATH
+from langchain.schema import Document
+from ..config.settings import VECTORSTORE_PATH, EMBEDDING_MODEL
 from ..utils.text_cleaner import clean_text
 
 # 로깅 설정
@@ -15,14 +15,17 @@ logger = logging.getLogger(__name__)
 class VectorStoreManager:
     """벡터 저장소 관리를 위한 클래스입니다."""
     
-    def __init__(self):
-        """VectorStoreManager를 초기화합니다."""
+    def __init__(self) -> None:
+        """
+        VectorStoreManager를 초기화합니다.
+        """
+        logger.info(f"다국어 임베딩 모델 로드 중: {EMBEDDING_MODEL}")
         self.embeddings = HuggingFaceEmbeddings(
             model_name=EMBEDDING_MODEL,
             model_kwargs={'device': 'cpu'},
             encode_kwargs={'normalize_embeddings': True}
         )
-        
+        logger.info("임베딩 모델 로드 완료")
 
             
     def _sanitize_documents(self, documents: List[Document]) -> List[Document]:

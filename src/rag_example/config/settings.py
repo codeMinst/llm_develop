@@ -11,7 +11,9 @@ PROCESSED_DATA_DIR = DATA_DIR / "processed"
 
 # 모델 설정
 OLLAMA_MODEL = "llama3.1"
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+# 다국어 임베딩 모델로 변경
+# EMBEDDING_MODEL = "all-MiniLM-L6-v2"  # 기존 모델
+EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"  # 다국어 지원 모델
 
 # 벡터 저장소 설정
 VECTORSTORE_PATH = PROCESSED_DATA_DIR / "chroma_db"

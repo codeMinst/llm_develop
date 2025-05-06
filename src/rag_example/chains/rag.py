@@ -40,17 +40,38 @@ class RAGChain:
         Returns:
             생성된 ConversationalRetrievalChain
         """
-        # 검색 설정 개선
-        retriever = self.vectorstore.as_retriever(
-            search_type="similarity",  # similarity, mmr
-            search_kwargs={
-                "k": SEARCH_K  # 검색할 문서 수
-            }
-        )
+        # 커스텀 검색 함수 정의
+        def custom_retriever(query: str) -> List[Document]:
+            # 벡터 저장소에서 직접 쿼리 실행
+            docs_and_scores = self.vectorstore.similarity_search_with_score(
+                query=query, 
+                k=SEARCH_K
+            )
+            
+            # 임계값 기반 필터링
+            threshold = 0.8  # 임계값
+            filtered_docs = []
+            
+            for doc, score in docs_and_scores:
+                # 점수가 높을수록 유사도가 높음 (일부 벡터 저장소는 거리 기반이므로 점수가 낮을수록 유사도가 높을 수 있음)
+                # 필요에 따라 조정
+                if score >= threshold:
+                    filtered_docs.append(doc)
+            
+            # 필터링 결과가 없으면 원본 문서 반환
+            return filtered_docs if filtered_docs else [doc for doc, _ in docs_and_scores]
+        
+        # 커스텀 검색 함수를 사용하는 ConversationalRetrievalChain 생성
+        from langchain.schema.retriever import BaseRetriever
+        
+        # 커스텀 리트리버 클래스 생성
+        class CustomRetriever(BaseRetriever):
+            def get_relevant_documents(self, query: str) -> List[Document]:
+                return custom_retriever(query)
         
         return ConversationalRetrievalChain.from_llm(
             llm=self.llm,
-            retriever=retriever,
+            retriever=CustomRetriever(),
             memory=self.memory,
             condense_question_prompt=get_condense_prompt(),
             combine_docs_chain_kwargs={"prompt": get_qa_prompt()},
