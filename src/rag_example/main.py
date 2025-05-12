@@ -1,81 +1,68 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
-RAG 시스템의 메인 실행 파일입니다.
+RAG 시스템 메인 모듈
 """
-from pathlib import Path
-from typing import List
-from langchain.schema import Document
-from .core.document import DocumentProcessor
-from .core.vectorstore import VectorStoreManager
-from .chains.rag import RAGChain
+import sys
+import logging
+from .pipeline import create_rag_pipeline
+
+# 로깅 설정
+# logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
 from .config.settings import RAW_DATA_DIR
-
-def get_document_files() -> List[Path]:
-    """
-    RAW_DATA_DIR에서 처리할 모든 문서 파일들을 가져옵니다.
-    
-    Returns:
-        처리할 문서 파일 경로 리스트
-    """
-    document_files = []
-    
-    # raw 폴더의 모든 파일 처리
-    for file in RAW_DATA_DIR.glob("*.*"):
-        # 숨김 파일이나 시스템 파일은 제외
-        if not file.name.startswith('.'):
-            document_files.append(file)
-    
-    return document_files
-
-def process_documents(files: List[Path]) -> List[Document]:
-    """
-    여러 문서 파일들을 처리하여 청크로 분할합니다.
-    
-    Args:
-        files: 처리할 문서 파일 경로 리스트
-        
-    Returns:
-        List[Document]: 분할된 청크 리스트. 각 청크는 Document 객체입니다.
-        
-    Raises:
-        ValueError: 문서 처리 중 오류가 발생한 경우
-    """
-    doc_processor = DocumentProcessor()
-    all_chunks = []
-    
-    for file_path in files:
-        print(f"문서를 처리합니다: {file_path}")
-        chunks = doc_processor.load_and_split(str(file_path))
-        print(f"  - {len(chunks)}개의 청크가 생성되었습니다.")
-        all_chunks.extend(chunks)
-    
-    return all_chunks
 
 def main():
     """RAG 시스템을 설정하고 실행합니다."""
-    # 문서 파일 가져오기
-    document_files = get_document_files()
+    # 명령줄 인자 파싱
+    clean_rag = '--clean-rag' in sys.argv
     
-    if not document_files:
-        print(f"\n경고: {RAW_DATA_DIR}에서 처리할 문서 파일(.txt 또는 .pdf)을 찾을 수 없습니다.")
-        return
+    # RAG 파이프라인 생성 및 실행
+    pipeline = create_rag_pipeline(
+        document_dir=RAW_DATA_DIR,
+        clean_vectorstore=clean_rag
+    )
     
-    print(f"\n처리할 문서 파일: {len(document_files)}개")
-    for file in document_files:
-        print(f"  - {file.name}")
+    # RAG 체인 가져오기
+    rag_chain = pipeline.rag_chain_builder
     
-    # 문서 처리 및 청크 분할
-    print("\n문서를 처리하고 청크로 분할합니다...")
-    all_chunks = process_documents(document_files)
-    print(f"\n총 {len(all_chunks)}개의 청크가 생성되었습니다.")
+    # 대화형 인터페이스 시작
+    print("RAG 대화 시스템이 시작되었습니다. 종료하려면 'exit' 또는 'quit'를 입력하세요.")
+    print("--------------------------------------------------")
+    print("PDF 파일과 텍스트 파일을 활용한 질의응답 시스템입니다.\n")
     
-    # 벡터 저장소 생성
-    print("\n벡터 저장소를 생성합니다...")
-    vectorstore = VectorStoreManager().create_vectorstore(all_chunks)
-    
-    # RAG 체인 생성 및 실행
-    print("\nConversationalRetrievalChain을 생성합니다...")
-    rag_chain = RAGChain(vectorstore)
-    rag_chain.run_conversation()
+    while True:
+        try:
+            # 사용자 입력 받기
+            query = input("질문을 입력하세요: ")
+            
+            # 종료 명령 확인
+            if query.lower() in ['exit', 'quit', '종료', '나가기']:
+                print("사용자에 의해 종료되었습니다.")
+                break
+            
+            # 대화 초기화 명령 확인
+            if query.lower() in ['reset', 'clear', '초기화', '리셋']:
+                rag_chain.reset_memory()
+                print("대화 기록이 초기화되었습니다.")
+                continue
+            
+            # RAG 체인 실행
+            result = rag_chain.run(query)
+            
+            # 결과 출력
+            print("\n답변:")
+            print(result['answer'])
+            print("--------------------------------------------------\n")
+            
+        except KeyboardInterrupt:
+            print("\n사용자에 의해 종료되었습니다.")
+            break
+            
+        except Exception as e:
+            logger.error(f"오류 발생: {str(e)}")
+            print(f"오류가 발생했습니다: {str(e)}")
 
 if __name__ == "__main__":
     main()

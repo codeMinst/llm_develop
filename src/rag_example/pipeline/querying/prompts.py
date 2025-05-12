@@ -34,12 +34,11 @@ def get_qa_prompt() -> PromptTemplate:
     대화 기록:
     {chat_history}
     
-    사용자 질문: {question}
+    질문: {question}
     
-    다음은 질문에 관련된 문서 내용입니다:
+    다음 문서 내용을 참고하여 질문에 답변하세요:
     {context}
     
-    이 문서 내용을 기반으로 사용자의 질문에 답변해주세요.
-    문서에 없는 내용은 지원하지 마시고, 없는 내용이면 없다고 정직하게 대답해주세요.
-    답변:"""
+    답변:
+    """
     return PromptTemplate.from_template(template)
