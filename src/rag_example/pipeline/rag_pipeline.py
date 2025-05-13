@@ -106,5 +106,3 @@ class RAGPipeline:
         logger.info(f"RAG 시스템 준비 완료 (총 준비 시간: {total_prep_time:.2f}초)")
         
         return self.rag_chain
-
-

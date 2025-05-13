@@ -17,7 +17,6 @@ from rag_example.config.settings import PRE_PROC_DIR
 
 # 로깅 설정
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # 로깅 레벨을 DEBUG로 설정
 
 class TextExtractor(DocumentFeatureProcessor):
     """

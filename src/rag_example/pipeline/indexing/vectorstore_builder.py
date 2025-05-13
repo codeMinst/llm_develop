@@ -19,7 +19,7 @@ from typing import List, Dict, Any, Optional
 
 from langchain.schema import Document
 from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 
 from rag_example.config.settings import (
     VECTORSTORE_PATH, 
@@ -165,9 +165,6 @@ class VectorStoreBuilder:
             embedding=self.embeddings,
             persist_directory=self.vectorstore_dir
         )
-        
-        # 벡터 저장소 저장
-        self.vectorstore.persist()
         
         # 벡터 저장소 생성 시간 로깅
         processing_time = time.time() - start_time
