@@ -14,7 +14,11 @@ PROCESSED_DATA_DIR = DATA_DIR / "processed"
 PRE_PROC_DIR = os.path.join(DATA_DIR, 'pre_proc')
 
 # 모델 설정
+LLM_TYPE = "claude"
+# 환경 변수에서 API 키 가져오기
+CLAUDE_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 OLLAMA_MODEL = "llama3.1"
+CLAUDE_MODEL = "claude-3-7-sonnet-20250219"  # Claude 모델 설정
 
 # 임베딩 모델
 # EMBEDDING_MODEL = "all-MiniLM-L6-v2"  # 기존 모델

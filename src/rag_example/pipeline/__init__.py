@@ -7,15 +7,9 @@
 - 인덱싱(indexing): 벡터 저장소 생성 및 관리
 - 질의(querying): 질문 처리 및 응답 생성
 """
-from .ingestion.document_loader import DocumentLoader
-from .indexing.vectorstore_builder import VectorStoreBuilder
-from .querying.rag_chain_builder import RAGChainBuilder
-from .pipeline import RAGPipeline, create_rag_pipeline
+# 절대 경로 임포트 사용
+from src.rag_example.pipeline.rag_pipeline import RAGPipeline
 
 __all__ = [
-    'DocumentLoader',
-    'VectorStoreBuilder',
-    'RAGChainBuilder',
-    'RAGPipeline',
-    'create_rag_pipeline'
+    'RAGPipeline'
 ]

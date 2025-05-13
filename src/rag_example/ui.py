@@ -7,8 +7,9 @@ import gradio as gr
 import logging
 from pathlib import Path
 
-from .pipeline import create_rag_pipeline
-from .config.settings import RAW_DATA_DIR
+# 절대 경로 임포트 사용
+from src.rag_example.pipeline import RAGPipeline
+from src.rag_example.config.settings import RAW_DATA_DIR, LLM_TYPE
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -27,9 +28,9 @@ class RAGUI:
         self.pipeline = None
         self.rag_chain = None
         self.chat_history = []
-        self.initialize_pipeline(clean_vectorstore=False)
+        self.initialize_pipeline(clean_vectorstore=True)
         
-    def initialize_pipeline(self, clean_vectorstore=False):
+    def initialize_pipeline(self, clean_vectorstore=True):
         """
         RAG 파이프라인 초기화
         
@@ -37,11 +38,12 @@ class RAGUI:
             clean_vectorstore: 벡터 저장소 초기화 여부
         """
         logger.info(f"RAG 파이프라인 초기화 (clean_vectorstore={clean_vectorstore})...")
-        self.pipeline = create_rag_pipeline(
+        self.pipeline = RAGPipeline(
             document_dir=RAW_DATA_DIR,
-            clean_vectorstore=clean_vectorstore
+            is_clean_vectorstore=clean_vectorstore,
+            llm_type=LLM_TYPE
         )
-        self.rag_chain = self.pipeline.rag_chain_builder
+        self.rag_chain = self.pipeline.setup_chain()
         logger.info("RAG 파이프라인 초기화 완료")
         
     def process_query(self, query, history):

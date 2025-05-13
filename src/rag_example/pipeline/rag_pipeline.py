@@ -18,7 +18,7 @@ from rag_example.pipeline.indexing.vectorstore_builder import VectorStoreBuilder
 from rag_example.pipeline.querying.rag_chain_builder import RAGChainBuilder
 from rag_example.config.settings import RAW_DATA_DIR, CHUNK_SIZE, CHUNK_OVERLAP
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)    
 
 class RAGPipeline:
     """
@@ -39,7 +39,9 @@ class RAGPipeline:
     def __init__(self, 
                  document_dir: str = RAW_DATA_DIR,
                  chunk_size: int = CHUNK_SIZE,
-                 chunk_overlap: int = CHUNK_OVERLAP):
+                 chunk_overlap: int = CHUNK_OVERLAP,
+                 is_clean_vectorstore: bool = False,
+                 llm_type: str = "ollama"):
         """
         RAG 파이프라인 초기화
         
@@ -47,17 +49,21 @@ class RAGPipeline:
             document_dir: 문서 파일이 있는 디렉토리 경로
             chunk_size: 문서 청크 크기
             chunk_overlap: 문서 청크 간 겹침 크기
+            is_clean_vectorstore: 기존 벡터 저장소를 삭제하고 새로 생성할지 여부
+            llm_type: 사용할 LLM 타입 ("ollama" 또는 "claude")
         """
         self.document_dir = document_dir
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        self.is_clean_vectorstore = is_clean_vectorstore
+        self.llm_type = llm_type
         
         # 파이프라인 컴포넌트 초기화
         # 각 컴포넌트는 특정 기능에 집중하며, 내부 구현 세부사항을 캡슐화합니다.
         # 이 방식은 불필요한 추상화를 피하고 LangChain 같은 라이브러리의 기능을 효과적으로 활용합니다.
         self.document_loader = DocumentLoader(document_dir)  # 문서 수집 및 처리 담당
         self.vectorstore_builder = VectorStoreBuilder()      # 벡터 저장소 생성 및 관리 담당
-        self.rag_chain_builder = RAGChainBuilder()           # 질의 처리 및 응답 생성 담당
+        self.rag_chain_builder = RAGChainBuilder(llm_type=self.llm_type)  # 질의 처리 및 응답 생성 담당
         
         # 파이프라인 결과 저장 변수
         self.documents = None
@@ -65,15 +71,12 @@ class RAGPipeline:
         self.vectorstore = None
         self.rag_chain = None
     
-    def run(self, clean_vectorstore: bool = False) -> 'RAGChainBuilder':
+    def setup_chain(self) -> 'ConversationalRetrievalChain':
         """
-        전체 RAG 파이프라인 실행
-        
-        Args:
-            clean_vectorstore: 기존 벡터 저장소를 삭제하고 새로 생성할지 여부
+        전체 RAG 파이프라인을 통해 체인 생성
             
         Returns:
-            구성된 RAG 체인 빌더
+            구성된 RAG 체인
         """
         # 전체 시스템 시작 시간
         total_start_time = time.time()
@@ -91,34 +94,17 @@ class RAGPipeline:
         logger.info("벡터 저장소 생성 단계 시작...")
         self.vectorstore = self.vectorstore_builder.build(
             self.chunks,
-            clean=clean_vectorstore
+            clean=self.is_clean_vectorstore
         )
         
         # 3. RAG 체인 구성
-        logger.info("RAG 체인 구성 단계 시작...")
+        logger.info(f"RAG 체인 구성 단계 시작... (LLM 타입: {self.llm_type})")
         self.rag_chain = self.rag_chain_builder.build(self.vectorstore)
         
         # 전체 시스템 준비 시간
         total_prep_time = time.time() - total_start_time
         logger.info(f"RAG 시스템 준비 완료 (총 준비 시간: {total_prep_time:.2f}초)")
         
-        return self.rag_chain_builder
+        return self.rag_chain
 
-def create_rag_pipeline(document_dir: str = RAW_DATA_DIR, 
-                       clean_vectorstore: bool = False) -> RAGPipeline:
-    """
-    RAG 파이프라인 생성 및 실행 헬퍼 함수
-    
-    이 함수는 파사드 패턴을 활용하여 파이프라인 생성 및 실행 과정을 단순화합니다.
-    클라이언트 코드는 복잡한 파이프라인 설정 과정을 알 필요 없이 이 함수만 호출하면 됩니다.
-    
-    Args:
-        document_dir: 문서 파일이 있는 디렉토리 경로
-        clean_vectorstore: 기존 벡터 저장소를 삭제하고 새로 생성할지 여부
-        
-    Returns:
-        구성된 RAG 파이프라인
-    """
-    pipeline = RAGPipeline(document_dir)
-    pipeline.run(clean_vectorstore)
-    return pipeline
+

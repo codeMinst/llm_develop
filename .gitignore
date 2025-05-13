@@ -44,7 +44,7 @@ ENV/
 *.xlsx
 *.db
 *.sqlite3
-data/processed/
+data/
 
 # Logs
 *.log

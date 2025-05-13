@@ -1,31 +1,29 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """
 RAG 시스템 메인 모듈
 """
 import sys
 import logging
-from .pipeline import create_rag_pipeline
+
+from rag_example.pipeline import RAGPipeline
+from rag_example.config.settings import RAW_DATA_DIR, LLM_TYPE
 
 # 로깅 설정
-# logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-from .config.settings import RAW_DATA_DIR
 
 def main():
     """RAG 시스템을 설정하고 실행합니다."""
     # 명령줄 인자 파싱
     clean_rag = '--clean-rag' in sys.argv
     
-    # RAG 파이프라인 생성 및 실행
-    pipeline = create_rag_pipeline(
+    # RAG 파이프라인 생성
+    pipeline = RAGPipeline(
         document_dir=RAW_DATA_DIR,
-        clean_vectorstore=clean_rag
+        is_clean_vectorstore=clean_rag,
+        llm_type=LLM_TYPE
     )
-    
     # RAG 체인 가져오기
-    rag_chain = pipeline.rag_chain_builder
+    rag_chain = pipeline.setup_chain()
     
     # 대화형 인터페이스 시작
     print("RAG 대화 시스템이 시작되었습니다. 종료하려면 'exit' 또는 'quit'를 입력하세요.")
@@ -53,7 +51,12 @@ def main():
             
             # 결과 출력
             print("\n답변:")
-            print(result['answer'])
+            # 결과 타입에 따라 처리
+            if isinstance(result, dict) and 'answer' in result:
+                print(result['answer'])
+            else:
+                # 문자열이거나 다른 형식인 경우
+                print(result)
             print("--------------------------------------------------\n")
             
         except KeyboardInterrupt:

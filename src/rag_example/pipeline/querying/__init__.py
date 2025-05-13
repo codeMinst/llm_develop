@@ -7,6 +7,6 @@
 - 프롬프트 관리
 - LLM 연결 및 응답 생성
 """
-from .rag_chain_builder import RAGChainBuilder
+from src.rag_example.pipeline.querying.rag_chain_builder import RAGChainBuilder
 
 __all__ = ['RAGChainBuilder']

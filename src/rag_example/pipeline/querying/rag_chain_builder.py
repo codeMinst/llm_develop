@@ -16,14 +16,17 @@ RAG 체인 구성 모듈
 import logging
 from typing import Dict, Any, Optional
 
-from langchain_community.vectorstores import Chroma
-from langchain.chains.conversational_retrieval.base import ConversationalRetrievalChain
+from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain_community.llms import Ollama
-from langchain.prompts import PromptTemplate
+from langchain.schema import Document
+from langchain.vectorstores.base import VectorStore
+from langchain.llms.base import BaseLLM
+from langchain.vectorstores import Chroma
 
-from rag_example.config.settings import OLLAMA_MODEL, SEARCH_K
-from rag_example.pipeline.querying.prompts import get_condense_prompt, get_qa_prompt
+from src.rag_example.config.settings import OLLAMA_MODEL, SEARCH_K
+from src.rag_example.pipeline.querying.prompts import get_condense_prompt, get_qa_prompt, PromptTemplate
+from src.rag_example.pipeline.querying.llm_factory import LLMFactory
 
 logger = logging.getLogger(__name__)
 
@@ -45,38 +48,45 @@ class RAGChainBuilder:
     """
     
     def __init__(self, 
+                 llm_type: str = "ollama",
                  model_name: str = OLLAMA_MODEL,
                  search_k: int = SEARCH_K):
         """
         RAGChainBuilder 초기화
         
         Args:
+            llm_type: 사용할 LLM 타입 ("ollama" 또는 "claude")
             model_name: 사용할 LLM 모델 이름
             search_k: 검색할 문서 수
         """
+        self.llm_type = llm_type
         self.model_name = model_name
         self.search_k = search_k
         self.llm = None
         self.memory = None
         self.chain = None
     
-    def _create_llm(self) -> Ollama:
+    def _create_llm(self) -> BaseLLM:
         """
         LLM을 생성합니다.
         
         Returns:
-            생성된 Ollama LLM 객체
+            생성된 LLM 객체
             
         설계 참고:
-            이 메서드는 팩토리 메서드 패턴을 적용하여 LLM 생성을 캡슐화합니다.
-            현재는 Ollama를 사용하지만, 다른 LLM으로 전환해야 할 경우 이 메서드만 수정하면 됩니다.
-            추가적인 어댑터 계층이 필요하지 않은 이유는 LangChain이 이미 LLM에 대한 추상화를 제공하기 때문입니다.
+            이 메서드는 팩토리 패턴을 적용하여 LLM 생성을 캡슐화합니다.
+            LLMFactory를 사용하여 다양한 LLM을 생성할 수 있습니다.
+            현재는 Ollama와 Claude를 지원하며, 필요에 따라 LLMFactory에 다른 LLM을 추가할 수 있습니다.
         """
-        logger.info(f"LLM 생성: {self.model_name}")
+        logger.info(f"LLM 생성: {self.llm_type} - {self.model_name}")
         
-        llm = Ollama(model=self.model_name, temperature=0.1)
-        
-        return llm
+        try:
+            llm = LLMFactory.create_llm(self.llm_type, self.model_name, temperature=0.1)
+            return llm
+        except ValueError as e:
+            logger.error(f"LLM 생성 실패: {str(e)}")
+            logger.info(f"기본 Ollama LLM으로 대체합니다.")
+            return LLMFactory.create_llm("ollama", OLLAMA_MODEL, temperature=0.1)
     
     def _create_memory(self) -> ConversationBufferMemory:
         """
@@ -147,6 +157,7 @@ class RAGChainBuilder:
             llm=self.llm,
             retriever=retriever,
             memory=self.memory,
+            verbose=True,
             combine_docs_chain_kwargs={"prompt": prompts["qa"]}
         )
         
