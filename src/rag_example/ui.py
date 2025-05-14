@@ -4,16 +4,24 @@
 RAG 시스템 웹 인터페이스 모듈
 """
 import gradio as gr
+import os
+import time
+import uuid
+import json
+from dotenv import load_dotenv
 import logging
-from pathlib import Path
+from rag_example.pipeline.rag_pipeline import RAGPipeline
+from rag_example.config.settings import RAW_DATA_DIR, LLM_TYPE
 
-# 절대 경로 임포트 사용
-from src.rag_example.pipeline import RAGPipeline
-from src.rag_example.config.settings import RAW_DATA_DIR, LLM_TYPE
+# .env 파일 로드
+load_dotenv()
 
-# 로깅 설정
+# 토크나이저 병렬 처리 관련 경고 해결
+# 최신 버전에서는 명시적으로 환경 변수 설정 권장
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
 
 class RAGUI:
     """
@@ -28,7 +36,23 @@ class RAGUI:
         self.pipeline = None
         self.rag_chain = None
         self.chat_history = []
+        
+        # 사용자 세션 ID 관리 - UUID를 사용하여 고유한 세션 ID 생성
+        self.session_id = self._generate_session_id()
+        logger.info(f"새 세션 생성: {self.session_id}")
+        
+        # 파이프라인 초기화
         self.initialize_pipeline(clean_vectorstore=True)
+        
+    def _generate_session_id(self):
+        """
+        고유한 세션 ID를 생성합니다.
+        
+        Returns:
+            세션 ID 문자열
+        """
+        # UUID와 타임스태프를 조합하여 고유한 세션 ID 생성
+        return f"web_user_{uuid.uuid4().hex[:8]}_{int(time.time())}"
         
     def initialize_pipeline(self, clean_vectorstore=True):
         """
@@ -57,23 +81,42 @@ class RAGUI:
         Returns:
             업데이트된 대화 기록
         """
-        if not query:
+        # 빈 질문 처리
+        if not query or query.strip() == "":
             return "", history
             
-        logger.info(f"질문 처리 중: {query}")
+        # 특별 명령 처리
+        if query.lower() in ['reset', 'clear', '초기화', '리셋']:
+            return self.reset_conversation(history)
+            
+        logger.info(f"질문 처리 시작: '{query}'")
+        
+        # RAG 체인 존재 확인
+        if self.rag_chain is None:
+            logger.error("RAG 체인이 초기화되지 않았습니다.")
+            response = "시스템이 준비되지 않았습니다. 재시작해 주세요."
+            history.append((query, response))
+            return "", history
         
         try:
-            # 질문 처리
-            result = self.rag_chain.run(query)
-            response = result.get('answer', '응답을 생성할 수 없습니다.')
+            # 질문 처리 - 세션 ID를 사용하여 사용자별 대화 기록 관리
+            logger.info(f"세션 {self.session_id}에서 질문 처리 중")
+            
+            # RAG 체인 실행
+            start_time = time.time()
+            result = self.rag_chain.run(query, session_id=self.session_id)
+            elapsed_time = time.time() - start_time
+            
+            # 결과가 문자열로 반환됨
+            response = result
             
             # 대화 기록 업데이트
             history.append((query, response))
-            logger.info("응답 생성 완료")
+            logger.info(f"응답 생성 완료 (소요시간: {elapsed_time:.2f}초)")
             
         except Exception as e:
             logger.error(f"질문 처리 중 오류 발생: {str(e)}")
-            response = f"오류가 발생했습니다: {str(e)}"
+            response = f"질문 처리 중 오류가 발생했습니다. 다시 시도해 주세요."
             history.append((query, response))
             
         return "", history
@@ -82,17 +125,32 @@ class RAGUI:
         """
         대화 기록 초기화
         
+        Args:
+            history: 현재 대화 기록
+            
         Returns:
             빈 대화 기록
         """
-        logger.info("대화 기록 초기화")
+        logger.info("대화 기록 초기화 시작")
         
-        # RAG 체인의 메모리도 초기화
-        if self.rag_chain is not None:
-            self.rag_chain.reset_memory()
-            logger.info("RAG 체인 메모리 초기화 완료")
-        
-        return [], []
+        try:
+            # RAG 체인의 메모리도 초기화
+            if self.rag_chain is not None:
+                # 현재 사용 중인 세션의 메모리를 초기화
+                self.rag_chain.reset_memory(session_id=self.session_id)
+                logger.info(f"RAG 체인 메모리 초기화 완료 (session_id={self.session_id})")
+                
+                # 새 세션 ID 생성 - 새로운 대화 시작
+                self.session_id = self._generate_session_id()
+                logger.info(f"새 세션 생성: {self.session_id}")
+            
+            logger.info("대화 기록 초기화 완료")
+            return [], []
+            
+        except Exception as e:
+            logger.error(f"대화 기록 초기화 중 오류 발생: {str(e)}")
+            # 오류가 발생해도 대화는 초기화
+            return [], []
         
     def rebuild_vectorstore(self):
         """
@@ -101,13 +159,20 @@ class RAGUI:
         Returns:
             상태 메시지
         """
-        logger.info("벡터 저장소 초기화 및 재생성 중...")
+        logger.info("벡터 저장소 초기화 및 재생성 시작")
         try:
+            # 벡터 저장소 초기화
             self.initialize_pipeline(clean_vectorstore=True)
+            
+            # 새 세션 생성 - 새로운 대화 시작
+            self.session_id = self._generate_session_id()
+            logger.info(f"새 세션 생성: {self.session_id}")
+            
+            logger.info("벡터 저장소 초기화 및 재생성 완료")
             return "벡터 저장소가 성공적으로 초기화되었습니다."
         except Exception as e:
             logger.error(f"벡터 저장소 초기화 중 오류 발생: {str(e)}")
-            return f"벡터 저장소 초기화 중 오류 발생: {str(e)}"
+            return f"벡터 저장소 초기화 중 오류가 발생했습니다. 다시 시도해 주세요."
     
     def get_document_info(self):
         """
@@ -116,29 +181,38 @@ class RAGUI:
         Returns:
             문서 정보 문자열
         """
+        logger.info("문서 정보 조회 시작")
         try:
-            doc_path = Path(RAW_DATA_DIR)
+            doc_path = RAW_DATA_DIR
             if not doc_path.exists():
-                return "문서 디렉토리를 찾을 수 없습니다."
-                
+                logger.warning(f"문서 디렉토리가 존재하지 않습니다: {doc_path}")
+                return f"문서 디렉토리가 존재하지 않습니다: {doc_path}"
+            
+            # 파일 목록 가져오기
             files = list(doc_path.glob("**/*"))
             pdf_files = [f for f in files if f.suffix.lower() == '.pdf']
             txt_files = [f for f in files if f.suffix.lower() == '.txt']
             
+            # 문서 정보 구성
             info = f"문서 디렉토리: {doc_path}\n"
             info += f"PDF 파일: {len(pdf_files)}개\n"
             info += f"텍스트 파일: {len(txt_files)}개\n"
             info += f"총 파일: {len(pdf_files) + len(txt_files)}개\n\n"
             
+            # 파일 목록 추가
             if pdf_files or txt_files:
                 info += "파일 목록:\n"
                 for f in sorted(pdf_files + txt_files):
                     info += f"- {f.name}\n"
+            else:
+                info += "문서 파일이 없습니다. 문서를 추가해 주세요.\n"
             
+            logger.info(f"문서 정보 조회 완료: PDF {len(pdf_files)}개, 텍스트 {len(txt_files)}개")
             return info
+            
         except Exception as e:
             logger.error(f"문서 정보 조회 중 오류 발생: {str(e)}")
-            return f"문서 정보 조회 중 오류 발생: {str(e)}"
+            return f"문서 정보를 가져오는 중 오류가 발생했습니다. 다시 시도해 주세요."
     
     def create_ui(self):
         """
@@ -148,7 +222,8 @@ class RAGUI:
             Gradio 인터페이스
         """
         with gr.Blocks(title="RAG 대화 시스템") as demo:
-            gr.Markdown("# RAG 대화 시스템")
+            with gr.Row():
+                gr.Markdown("# RAG 대화 시스템")
             gr.Markdown("PDF 파일과 텍스트 파일을 활용한 질의응답 시스템입니다.")
             
             with gr.Row():
@@ -168,7 +243,8 @@ class RAGUI:
                     
                     with gr.Row():
                         submit_btn = gr.Button("질문하기", variant="primary")
-                        clear_btn = gr.Button("대화 초기화")
+                        clear_btn = gr.Button("chat 초기화")
+                        logout_btn = gr.Button("로그아웃", variant="huggingface")
                 
                 with gr.Column(scale=1):
                     gr.Markdown("### 시스템 관리")
@@ -186,6 +262,7 @@ class RAGUI:
                         rebuild_btn = gr.Button("벡터 저장소 초기화", variant="secondary")
                         system_msg = gr.Textbox(
                             label="시스템 메시지", 
+                            lines=2,
                             interactive=False,
                             value="시스템이 준비되었습니다."
                         )
@@ -221,6 +298,48 @@ class RAGUI:
                 outputs=[doc_info]
             )
             
+            # 로그아웃 버튼 기능 연결 - Gradio 기본 로그아웃 경로 사용
+            logout_btn.click(
+                fn=lambda: None,
+                inputs=None,
+                outputs=None,
+                js="""
+                () => {
+                    window.location.href = '/logout';
+                    return [];
+                }
+                """)
+            
+            # 자동 로그아웃 기능 추가 (10분 타임아웃)
+            auto_logout_html = """
+            <script>
+                // 자동 로그아웃 시간 (밀리초 단위)
+                const TIMEOUT_DURATION = 10 * 60 * 1000; // 10분
+                let timeoutId;
+                
+                // 타이머 재설정 함수
+                function resetTimer() {
+                    clearTimeout(timeoutId);
+                    timeoutId = setTimeout(logout, TIMEOUT_DURATION);
+                }
+                
+                // 로그아웃 함수
+                function logout() {
+                    // Gradio 기본 로그아웃 경로로 이동
+                    window.location.href = "/logout";
+                }
+                
+                // 사용자 활동 감지 이벤트 리스너 등록
+                document.addEventListener('mousemove', resetTimer);
+                document.addEventListener('keypress', resetTimer);
+                document.addEventListener('click', resetTimer);
+                
+                // 초기 타이머 설정
+                resetTimer();
+            </script>
+            """
+            gr.HTML(auto_logout_html)      
+            
         return demo
 
 def main():
@@ -229,7 +348,27 @@ def main():
     """
     ui = RAGUI()
     demo = ui.create_ui()
-    demo.launch(share=False)
+    # 환경 변수에서 사용자 인증 정보 가져오기
+    auth = []
+    
+    # 환경 변수에서 사용자 정보 가져오기
+    auth_users = os.getenv("AUTH_USERS")
+    if auth_users:
+        try:
+            # JSON 형식으로 파싱 (예: '[{"username":"user1","password":"pass1"},{"username":"user2","password":"pass2"}]')
+            users_data = json.loads(auth_users)
+            for user in users_data:
+                if isinstance(user, dict) and "username" in user and "password" in user:
+                    auth.append((user["username"], user["password"]))
+        except json.JSONDecodeError:
+            print("AUTH_USERS의 형식이 올바르지 않습니다.")
+    
+    # 서버 시작 (인증 정보 적용)
+    demo.launch(
+        share=False, 
+        auth=auth, 
+        auth_message="LLM-Driven Profile System by NHS"
+    )
 
 if __name__ == "__main__":
     main()
