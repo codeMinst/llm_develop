@@ -102,7 +102,6 @@ class VectorStoreBuilder:
             if not hasattr(doc, 'page_content') or not doc.page_content.strip():
                 continue
                 
-            # 문서가 이미 정제되었다고 가정하고 최소한의 추가 처리만 수행
             # 임베딩에 영향을 줄 수 있는 불필요한 공백 제거
             page_content = doc.page_content.strip()
             
@@ -137,11 +136,11 @@ class VectorStoreBuilder:
         """
         start_time = time.time()
         
-        # 기존 벡터 저장소 삭제 여부 확인
-        if clean and os.path.exists(self.vectorstore_dir):
-            logger.info("명령줄 인자 '--clean-rag'가 감지되었습니다. 기존 벡터 저장소를 삭제하고 새로 생성합니다.")
-            shutil.rmtree(self.vectorstore_dir)
-            os.makedirs(self.vectorstore_dir, exist_ok=True)
+        # # 기존 벡터 저장소 삭제 여부 확인
+        # if clean and os.path.exists(self.vectorstore_dir):
+        #     logger.info("명령줄 인자 '--clean-rag'가 감지되었습니다. 기존 벡터 저장소를 삭제하고 새로 생성합니다.")
+        #     shutil.rmtree(self.vectorstore_dir)
+        #     os.makedirs(self.vectorstore_dir, exist_ok=True)
         
         # 임베딩 모델 생성
         if self.embeddings is None:
@@ -162,8 +161,8 @@ class VectorStoreBuilder:
         # Chroma 벡터 저장소 생성
         self.vectorstore = Chroma.from_documents(
             documents=sanitized_documents,
-            embedding=self.embeddings,
-            persist_directory=self.vectorstore_dir
+            embedding=self.embeddings
+            # persist_directory=self.vectorstore_dir
         )
         
         # 벡터 저장소 생성 시간 로깅
@@ -172,33 +171,3 @@ class VectorStoreBuilder:
         
         return self.vectorstore
     
-    def load(self) -> Optional[Chroma]:
-        """
-        기존 벡터 저장소를 로드합니다.
-        
-        Returns:
-            로드된 Chroma 벡터 저장소 또는 오류 시 None
-        """
-        try:
-            # 벡터 저장소 디렉토리 확인
-            if not os.path.exists(self.vectorstore_dir):
-                logger.warning(f"벡터 저장소 디렉토리가 존재하지 않습니다: {self.vectorstore_dir}")
-                return None
-            
-            # 임베딩 모델 생성
-            if self.embeddings is None:
-                self.embeddings = self._create_embeddings()
-            
-            # 벡터 저장소 로드
-            logger.info(f"기존 벡터 저장소를 로드합니다: {self.vectorstore_dir}")
-            
-            self.vectorstore = Chroma(
-                persist_directory=self.vectorstore_dir,
-                embedding_function=self.embeddings
-            )
-            
-            return self.vectorstore
-            
-        except Exception as e:
-            logger.error(f"벡터 저장소 로드 중 오류 발생: {str(e)}")
-            return None
