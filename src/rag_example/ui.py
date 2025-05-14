@@ -224,7 +224,7 @@ class RAGUI:
         with gr.Blocks(title="RAG 대화 시스템") as demo:
             with gr.Row():
                 gr.Markdown("# RAG 대화 시스템")
-            gr.Markdown("PDF 파일과 텍스트 파일을 활용한 질의응답 시스템입니다.")
+            gr.Markdown("RAG를 활용한 질의응답 시스템입니다.")
             
             with gr.Row():
                 with gr.Column(scale=2):

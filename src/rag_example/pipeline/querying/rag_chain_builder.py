@@ -18,31 +18,16 @@ from typing import Dict, List, Optional
 
 from langchain_community.vectorstores import Chroma
 from langchain.llms.base import BaseLLM
-from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.chat_history import BaseChatMessageHistory
-from pydantic import BaseModel, Field
 
 from src.rag_example.config.settings import OLLAMA_MODEL, SEARCH_K
 from src.rag_example.pipeline.querying.prompts import get_condense_prompt, get_qa_prompt, PromptTemplate
 from src.rag_example.pipeline.querying.llm_factory import LLMFactory
+from src.rag_example.pipeline.summarizing_memory import SummarizingMemory
 
 logger = logging.getLogger(__name__)
 
-
-class InMemoryHistory(BaseChatMessageHistory, BaseModel):
-    """
-    메모리에 메세지 히스토리를 저장하는 클래스
-    """
-    messages: List[BaseMessage] = Field(default_factory=list)
-    session_id: str = Field(default="default")
-
-    def add_messages(self, messages: List[BaseMessage]) -> None:
-        """메세지 목록을 히스토리에 추가합니다."""
-        self.messages.extend(messages)
-
-    def clear(self) -> None:
-        """메세지 히스토리를 초기화합니다."""
-        self.messages = []
 
 class RAGChainBuilder:
     """
@@ -116,7 +101,14 @@ class RAGChainBuilder:
         # 세션 ID가 없으면 새로 생성
         if session_id not in self.session_histories:
             logger.info(f"새 세션 생성: {session_id}")
-            self.session_histories[session_id] = InMemoryHistory(session_id=session_id)
+            # 요약을 위한 LLM 사용
+            if self.llm is None:
+                self.llm = self._create_llm()
+            self.session_histories[session_id] = SummarizingMemory(
+                session_id=session_id,
+                llm=self.llm,
+                max_recent_turns=4  # 최근 4턴의 대화만 유지
+            )
         
         return self.session_histories[session_id]
     
@@ -162,32 +154,25 @@ class RAGChainBuilder:
             search_kwargs={"k": self.search_k}
         )
         
-        # LCEL 기반 RAG 체인 구성
         def format_docs(docs):
             return "\n\n".join([doc.page_content for doc in docs])
-        
-        # 문서 검색 및 응답 생성 파이프라인
-        # 메시지 히스토리를 문자열로 변환하는 함수 추가
-        def format_chat_history(chat_history):
-            if not chat_history:
-                return ""
-            formatted_history = ""
-            for message in chat_history:
-                if hasattr(message, 'content') and isinstance(message.content, str):
-                    if isinstance(message, HumanMessage):
-                        formatted_history += f"사용자: {message.content}\n"
-                    elif isinstance(message, AIMessage):
-                        formatted_history += f"AI: {message.content}\n"
-            return formatted_history
             
         # 기본 RAG 체인 구성 - 단순화
-        def run_rag_chain(query_text):
+        def run_rag_chain(query_text, history=None):
             # 1. 문서 검색
             docs = retriever.invoke(query_text)
             context = format_docs(docs)
             
+            # 대화 기록 가져오기
+            chat_history = ""
+            if history and isinstance(history, SummarizingMemory):
+                # 요약된 대화 기록 가져오기
+                chat_history = history.load_summary_and_recent()
+                if chat_history:
+                    logger.debug(f"대화 기록 사용 (길이: {len(chat_history)})")
+            
             # 2. 프롬프트 구성 및 LLM 요청
-            prompt_args = {"context": context, "question": query_text, "chat_history": ""}
+            prompt_args = {"context": context, "question": query_text, "chat_history": chat_history}
             chain_response = qa_prompt.format_messages(**prompt_args)
             llm_response = self.llm.invoke(chain_response)
             
@@ -209,8 +194,8 @@ class RAGChainBuilder:
                 if not query:
                     return "질문이 없습니다."
                 
-                # 런너블 함수 실행
-                result = run_rag_chain(query)
+                # 런너블 함수 실행 - 대화 기록 전달
+                result = run_rag_chain(query, history)
                 
                 # 사용자 질문과 AI 응답 추가
                 history.add_messages([
@@ -250,6 +235,13 @@ class RAGChainBuilder:
             return "시스템이 준비되지 않았습니다."
         
         try:
+            # 세션 확인 - 존재하지 않을 때만 새로 생성
+            if session_id not in self.session_histories:
+                logger.info(f"새 세션 생성: {session_id}")
+                self.session_histories[session_id] = SummarizingMemory(session_id=session_id)
+            else:
+                logger.info(f"기존 세션 사용: {session_id}, 메시지 수: {len(self.session_histories[session_id].messages)}")
+            
             # 체인 실행
             logger.info(f"질문 처리 시작: '{query}', 세션 ID: {session_id}")
             result = self.chain(
@@ -265,20 +257,26 @@ class RAGChainBuilder:
     
     def reset_memory(self, session_id: str = "default") -> None:
         """
-        대화 메세지 히스토리를 초기화합니다.
-        
+        세션의 메세지 히스토리를 초기화합니다.
+
         Args:
-            session_id: 초기화할 세션 ID, 기본값은 "default"
+            session_id: 초기화할 세션 ID, "all" 지정 시 전체 초기화
         """
         if session_id == "all":
-            # 모든 세션 초기화
             self.session_histories.clear()
-            logger.info("모든 세션 히스토리 초기화 완료")
-        elif session_id in self.session_histories:
-            # 해당 세션만 초기화
+            logger.info("✅ 모든 세션 히스토리 초기화 완료")
+            return
+
+        if session_id in self.session_histories:
             self.session_histories[session_id].clear()
-            logger.info(f"세션 '{session_id}' 히스토리 초기화 완료")
+            logger.info(f"✅ 세션 '{session_id}' 히스토리 초기화 완료")
         else:
-            # 세션이 없으면 새로 생성
-            self.session_histories[session_id] = InMemoryHistory(session_id=session_id)
-            logger.info(f"새 세션 '{session_id}' 생성 완료")
+            # 세션이 없다면 새로 생성
+            if self.llm is None:
+                self.llm = self._create_llm()
+            self.session_histories[session_id] = SummarizingMemory(
+                session_id=session_id,
+                llm=self.llm,
+            max_recent_turns=4
+        )
+        logger.info(f"🆕 새 세션 '{session_id}' 생성 및 초기화 완료")

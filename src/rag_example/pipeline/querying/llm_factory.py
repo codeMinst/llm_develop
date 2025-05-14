@@ -11,7 +11,10 @@ from typing import Any, Protocol
 from langchain.llms.base import BaseLLM
 from langchain_community.llms import Ollama
 from langchain_anthropic import ChatAnthropic
+from langchain.callbacks import StdOutCallbackHandler
+from langchain.callbacks.base import BaseCallbackHandler
 from src.rag_example.config.settings import OLLAMA_MODEL, CLAUDE_KEY, CLAUDE_MODEL
+from src.rag_example.config.settings import IS_VERBOSE
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +75,24 @@ class ClaudeResponseHandler:
         elif isinstance(response, str):
             return response
         return str(response)
+
+
+class VerboseCallbackHandler(BaseCallbackHandler):
+    """상세한 API 요청과 응답을 로깅하는 콜백 핸들러"""
+    
+    def on_llm_start(self, serialized, prompts, **kwargs):
+        """LLM 시작 시 호출"""
+        logger.debug(f"\n\n==== LLM 요청 시작 ====")
+        for i, prompt in enumerate(prompts):
+            logger.debug(f"\n[요청 {i+1}]\n{prompt}\n")
+    
+    def on_llm_end(self, response, **kwargs):
+        """LLM 종료 시 호출"""
+        logger.debug(f"==== LLM 응답 ====\n{response}")
+        
+    def on_llm_error(self, error, **kwargs):
+        """LLM 오류 발생 시 호출"""
+        logger.error(f"==== LLM 오류 ====\n{error}")
 
 
 class LLMFactory:
@@ -157,7 +178,19 @@ class LLMFactory:
             생성된 Ollama LLM 객체
         """
         logger.info(f"Ollama LLM 생성: {model_name}")
-        return Ollama(model=model_name, temperature=temperature, **kwargs)
+        
+        # 콜백 핸들러 설정
+        callbacks = []
+        if IS_VERBOSE:
+            callbacks.append(StdOutCallbackHandler())
+            callbacks.append(VerboseCallbackHandler())
+            
+        return Ollama(
+            model=model_name, 
+            verbose=IS_VERBOSE,
+            callbacks=callbacks,
+            temperature=temperature,
+            **kwargs)
     
     @staticmethod
     def _create_claude(model_name: str = CLAUDE_MODEL, temperature: float = 0.1, **kwargs) -> ChatAnthropic:
@@ -179,6 +212,7 @@ class LLMFactory:
         return ChatAnthropic(
             model=CLAUDE_MODEL,
             temperature=temperature,
+            verbose=IS_VERBOSE,
             anthropic_api_key=CLAUDE_KEY,
             **kwargs
         )

@@ -14,10 +14,11 @@ PROCESSED_DATA_DIR = DATA_DIR / "processed"
 PRE_PROC_DIR = os.path.join(DATA_DIR, 'pre_proc')
 
 # 모델 설정
-LLM_TYPE = "claude"
+LLM_TYPE = "ollama"
 # API 키 가져오기
 # CLAUDE_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 CLAUDE_KEY = os.getenv("API_KEY")
+IS_VERBOSE = True
 OLLAMA_MODEL = "llama3.1"
 CLAUDE_MODEL = "claude-3-7-sonnet-20250219"  # Claude 모델 설정
 

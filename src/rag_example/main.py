@@ -10,13 +10,16 @@ from rag_example.config.settings import RAW_DATA_DIR, LLM_TYPE
 # 토크나이저 병렬 처리 관련 경고 해결
 # 최신 버전에서는 명시적으로 환경 변수 설정 권장
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# 로깅 설정
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 # 메인 로거 설정
 logger = logging.getLogger(__name__)
 
 
+
 def main():
-    """RAG 시스템을 설정하고 실행합니다."""
+    """RAG 시스템을 설정하고 실행합니다."""# LangChain 로깅 활성화
     # 명령줄 인자 파싱
     clean_rag = '--clean-rag' in sys.argv
     

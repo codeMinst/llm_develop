@@ -14,8 +14,7 @@
 import logging
 import os
 import time
-import shutil
-from typing import List, Dict, Any, Optional
+from typing import List
 
 from langchain.schema import Document
 from langchain_community.vectorstores import Chroma
