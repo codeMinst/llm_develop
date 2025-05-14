@@ -3,11 +3,10 @@
 """
 LLM 팩토리 모듈
 
-이 모듈은 다양한 LLM(Large Language Model)을 생성하기 위한 팩토리 패턴을 구현합니다.
+이 모듈은 다양한 LLM(Large Language Model)을 생성하고 관리하기 위한 팩토리 패턴을 구현합니다.
 """
 import logging
-import os
-from typing import Optional, Dict, Any, Union
+from typing import Any, Protocol
 
 from langchain.llms.base import BaseLLM
 from langchain_community.llms import Ollama
@@ -16,11 +15,70 @@ from src.rag_example.config.settings import OLLAMA_MODEL, CLAUDE_KEY, CLAUDE_MOD
 
 logger = logging.getLogger(__name__)
 
+class ResponseHandler(Protocol):
+    """
+    LLM 응답 처리를 위한 프로토콜
+    """
+    def process_response(self, response: Any) -> str:
+        """
+        LLM 응답을 처리하여 문자열로 반환합니다.
+        
+        Args:
+            response: LLM 응답 객체
+            
+        Returns:
+            처리된 응답 문자열
+        """
+        ...
+
+
+class OllamaResponseHandler:
+    """
+    Ollama LLM 응답 처리기
+    """
+    @staticmethod
+    def process_response(response: Any) -> str:
+        """
+        Ollama LLM 응답을 처리합니다.
+        
+        Args:
+            response: Ollama LLM 응답 (문자열)
+            
+        Returns:
+            처리된 응답 문자열
+        """
+        if isinstance(response, str):
+            return response
+        return str(response)
+
+
+class ClaudeResponseHandler:
+    """
+    Claude LLM 응답 처리기
+    """
+    @staticmethod
+    def process_response(response: Any) -> str:
+        """
+        Claude LLM 응답을 처리합니다.
+        
+        Args:
+            response: Claude LLM 응답 (content 속성을 가진 객체)
+            
+        Returns:
+            처리된 응답 문자열
+        """
+        if hasattr(response, 'content'):
+            return response.content
+        elif isinstance(response, str):
+            return response
+        return str(response)
+
+
 class LLMFactory:
     """
     LLM 팩토리 클래스
     
-    다양한 LLM(Large Language Model)을 생성하기 위한 팩토리 패턴을 구현합니다.
+    다양한 LLM(Large Language Model)을 생성하고 관리하기 위한 팩토리 패턴을 구현합니다.
     현재 지원하는 LLM:
     - Ollama: 로컬에서 실행되는 LLM
     - Claude: Anthropic의 Claude API
@@ -48,6 +106,42 @@ class LLMFactory:
             return LLMFactory._create_claude(model_name, **kwargs)
         else:
             raise ValueError(f"지원하지 않는 LLM 타입입니다: {llm_type}")
+    
+    @staticmethod
+    def get_response_handler(llm_type: str) -> ResponseHandler:
+        """
+        LLM 타입에 맞는 응답 처리기를 가져옵니다.
+        
+        Args:
+            llm_type: LLM 타입 ("ollama" 또는 "claude")
+            
+        Returns:
+            응답 처리기 객체
+            
+        Raises:
+            ValueError: 지원하지 않는 LLM 타입인 경우
+        """
+        if llm_type.lower() == "ollama":
+            return OllamaResponseHandler()
+        elif llm_type.lower() == "claude":
+            return ClaudeResponseHandler()
+        else:
+            raise ValueError(f"지원하지 않는 LLM 타입입니다: {llm_type}")
+    
+    @staticmethod
+    def process_response(llm_type: str, response: Any) -> str:
+        """
+        LLM 타입에 맞는 응답 처리기를 사용하여 응답을 처리합니다.
+        
+        Args:
+            llm_type: LLM 타입 ("ollama" 또는 "claude")
+            response: LLM 응답 객체
+            
+        Returns:
+            처리된 응답 문자열
+        """
+        handler = LLMFactory.get_response_handler(llm_type)
+        return handler.process_response(response)
     
     @staticmethod
     def _create_ollama(model_name: str, temperature: float = 0.1, **kwargs) -> Ollama:

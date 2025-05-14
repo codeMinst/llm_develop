@@ -2,18 +2,15 @@
 PDF 문서를 처리하는 어댑터 모듈입니다.
 """
 import logging
-import os
 import re
 from pathlib import Path
-from typing import Any, Set, List, Optional, Dict, Tuple
-from abc import ABC, abstractmethod
+from typing import Any, Optional
 
 import fitz   # PyMuPDF
 
 from rag_example.adapters.base.base import DocumentAdapter
 from rag_example.adapters.base.feature import DocumentFeatureProcessor
 from rag_example.utils.runner import Runner
-from rag_example.config.settings import PRE_PROC_DIR
 
 # 로깅 설정
 logger = logging.getLogger(__name__)
@@ -126,9 +123,7 @@ class PDFAdapter(DocumentAdapter):
                 # 블록 단위로 텍스트 추출 (헤더/푸터 제거)
                 page_text = self.text_extractor.run(page).strip()
                 # Ollama를 사용한 한국어 띄어쓰기 교정 적용
-                logger.info("Ollama를 사용한 한국어 띄어쓰기 교정 적용 중...")
                 page_text = self.ollama_spacing.run(page_text)
-                logger.info("Ollama를 사용한 한국어 띄어쓰기 교정 완료")
                 # 페이지 시작 태그 추가 (태그 다음에 빈 행 추가)
                 page_text = re.sub(r'\n{2,}', '\n', page_text)
                 page_text += "\n\n"  

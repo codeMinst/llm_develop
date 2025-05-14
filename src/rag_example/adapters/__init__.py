@@ -16,4 +16,4 @@ from .base.base import DocumentAdapter
 from .document.pdf import PDFAdapter, TextExtractor
 
 # 어댑터 팩토리
-from .factory import get_document_adapter, DocumentAdapterError
+from .doc_factory import get_document_proc, DocumentAdapterError

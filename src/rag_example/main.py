@@ -1,15 +1,19 @@
 """
 RAG 시스템 메인 모듈
 """
+import os
 import sys
 import logging
-
 from rag_example.pipeline import RAGPipeline
 from rag_example.config.settings import RAW_DATA_DIR, LLM_TYPE
 
-# 로깅 설정
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# 토크나이저 병렬 처리 관련 경고 해결
+# 최신 버전에서는 명시적으로 환경 변수 설정 권장
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# 메인 로거 설정
 logger = logging.getLogger(__name__)
+
 
 def main():
     """RAG 시스템을 설정하고 실행합니다."""
@@ -43,20 +47,21 @@ def main():
             # 대화 초기화 명령 확인
             if query.lower() in ['reset', 'clear', '초기화', '리셋']:
                 rag_chain.reset_memory()
-                print("대화 기록이 초기화되었습니다.")
+                print("현재 대화 기록이 초기화되었습니다.")
+                continue
+                
+            # 모든 세션 초기화 명령 확인
+            if query.lower() in ['reset all', 'clear all', '모두 초기화', '전체 초기화']:
+                rag_chain.reset_memory(session_id="all")
+                print("모든 세션의 대화 기록이 초기화되었습니다.")
                 continue
             
             # RAG 체인 실행
             result = rag_chain.run(query)
             
-            # 결과 출력
+            # 결과 출력 (이제 항상 문자열로 반환됨)
             print("\n답변:")
-            # 결과 타입에 따라 처리
-            if isinstance(result, dict) and 'answer' in result:
-                print(result['answer'])
-            else:
-                # 문자열이거나 다른 형식인 경우
-                print(result)
+            print(result)
             print("--------------------------------------------------\n")
             
         except KeyboardInterrupt:

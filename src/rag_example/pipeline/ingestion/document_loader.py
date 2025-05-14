@@ -21,7 +21,7 @@ from typing import List
 from langchain.schema.document import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from rag_example.adapters.factory import get_document_adapter, DocumentAdapterError
+from rag_example.adapters.doc_factory import get_document_proc, DocumentAdapterError
 from rag_example.config.settings import PRE_PROC_DIR, CHUNK_SIZE, CHUNK_OVERLAP, CHUNK_SEPARATORS
 
 logger = logging.getLogger(__name__)
@@ -108,10 +108,10 @@ class DocumentLoader:
             try:
                 # 어댑터 팩토리를 통해 적절한 어댑터 생성
                 logger.info(f"문서를 처리합니다: {file_path.name} (형식: {file_ext})")
-                document_adapter = get_document_adapter(file_ext, str(file_path))
+                document_processor = get_document_proc(file_ext, str(file_path))
                 
                 # 어댑터를 통해 문서 처리
-                processed_text = document_adapter.run()
+                processed_text = document_processor.run()
                 
                 # 파일 형식에 따라 카운트 증가
                 if file_ext == '.pdf':

@@ -11,7 +11,6 @@ RAG 파이프라인 모듈
 """
 import logging
 import time
-from typing import List
 
 from rag_example.pipeline.ingestion.document_loader import DocumentLoader
 from rag_example.pipeline.indexing.vectorstore_builder import VectorStoreBuilder
@@ -71,12 +70,12 @@ class RAGPipeline:
         self.vectorstore = None
         self.rag_chain = None
     
-    def setup_chain(self) -> 'ConversationalRetrievalChain':
+    def setup_chain(self) -> RAGChainBuilder:
         """
         전체 RAG 파이프라인을 통해 체인 생성
             
         Returns:
-            구성된 RAG 체인
+            RAGChainBuilder 인스턴스 - run 메서드를 통해 질의응답 가능
         """
         # 전체 시스템 시작 시간
         total_start_time = time.time()
@@ -99,10 +98,11 @@ class RAGPipeline:
         
         # 3. RAG 체인 구성
         logger.info(f"RAG 체인 구성 단계 시작... (LLM 타입: {self.llm_type})")
-        self.rag_chain = self.rag_chain_builder.build(self.vectorstore)
+        # RunnableWithMessageHistory 객체를 내부적으로 저장하고 RAGChainBuilder 인스턴스 반환
+        self.rag_chain_builder.build(self.vectorstore)
         
         # 전체 시스템 준비 시간
         total_prep_time = time.time() - total_start_time
         logger.info(f"RAG 시스템 준비 완료 (총 준비 시간: {total_prep_time:.2f}초)")
         
-        return self.rag_chain
+        return self.rag_chain_builder

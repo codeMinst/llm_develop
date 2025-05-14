@@ -14,21 +14,35 @@ RAG 체인 구성 모듈
 - 외부 의존성(프롬프트, LLM)을 캡슐화하여 관리하기 쉽게 합니다.
 """
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, List, Optional
 
-from langchain.chains import ConversationalRetrievalChain
-from langchain.memory import ConversationBufferMemory
-from langchain_community.llms import Ollama
-from langchain.schema import Document
-from langchain.vectorstores.base import VectorStore
+from langchain_community.vectorstores import Chroma
 from langchain.llms.base import BaseLLM
-from langchain.vectorstores import Chroma
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+from langchain_core.chat_history import BaseChatMessageHistory
+from pydantic import BaseModel, Field
 
 from src.rag_example.config.settings import OLLAMA_MODEL, SEARCH_K
 from src.rag_example.pipeline.querying.prompts import get_condense_prompt, get_qa_prompt, PromptTemplate
 from src.rag_example.pipeline.querying.llm_factory import LLMFactory
 
 logger = logging.getLogger(__name__)
+
+
+class InMemoryHistory(BaseChatMessageHistory, BaseModel):
+    """
+    메모리에 메세지 히스토리를 저장하는 클래스
+    """
+    messages: List[BaseMessage] = Field(default_factory=list)
+    session_id: str = Field(default="default")
+
+    def add_messages(self, messages: List[BaseMessage]) -> None:
+        """메세지 목록을 히스토리에 추가합니다."""
+        self.messages.extend(messages)
+
+    def clear(self) -> None:
+        """메세지 히스토리를 초기화합니다."""
+        self.messages = []
 
 class RAGChainBuilder:
     """
@@ -63,8 +77,10 @@ class RAGChainBuilder:
         self.model_name = model_name
         self.search_k = search_k
         self.llm = None
-        self.memory = None
         self.chain = None
+        
+        # 세션별 메세지 히스토리 저장소
+        self.session_histories = {}
     
     def _create_llm(self) -> BaseLLM:
         """
@@ -81,26 +97,28 @@ class RAGChainBuilder:
         logger.info(f"LLM 생성: {self.llm_type} - {self.model_name}")
         
         try:
-            llm = LLMFactory.create_llm(self.llm_type, self.model_name, temperature=0.1)
-            return llm
+            return LLMFactory.create_llm(self.llm_type, self.model_name, temperature=0.1)
         except ValueError as e:
             logger.error(f"LLM 생성 실패: {str(e)}")
             logger.info(f"기본 Ollama LLM으로 대체합니다.")
             return LLMFactory.create_llm("ollama", OLLAMA_MODEL, temperature=0.1)
     
-    def _create_memory(self) -> ConversationBufferMemory:
+    def get_session_history(self, session_id: str) -> BaseChatMessageHistory:
         """
-        대화 메모리를 생성합니다.
+        세션 ID에 해당하는 메세지 히스토리 객체를 가져오거나 생성합니다.
         
+        Args:
+            session_id: 세션 아이디
+            
         Returns:
-            생성된 ConversationBufferMemory 객체
+            해당 세션의 BaseChatMessageHistory 객체
         """
-        memory = ConversationBufferMemory(
-            memory_key="chat_history",
-            return_messages=True
-        )
+        # 세션 ID가 없으면 새로 생성
+        if session_id not in self.session_histories:
+            logger.info(f"새 세션 생성: {session_id}")
+            self.session_histories[session_id] = InMemoryHistory(session_id=session_id)
         
-        return memory
+        return self.session_histories[session_id]
     
     def _create_prompt_templates(self) -> Dict[str, PromptTemplate]:
         """
@@ -118,7 +136,7 @@ class RAGChainBuilder:
             "qa": qa_prompt
         }
     
-    def build(self, vectorstore: Chroma) -> ConversationalRetrievalChain:
+    def build(self, vectorstore: Chroma) -> Optional[callable]:
         """
         RAG 체인을 구성합니다.
         
@@ -126,25 +144,17 @@ class RAGChainBuilder:
             vectorstore: 사용할 벡터 저장소
             
         Returns:
-            구성된 ConversationalRetrievalChain 객체
-            
-        설계 참고:
-            이 메서드는 빌더 패턴의 중심 메서드로, 모든 구성 요소를 조합하여 RAG 체인을 생성합니다.
-            각 구성 요소는 모듈화된 메서드로 캡슐화되어 있어 유지보수성을 향상시킵니다.
-            LangChain의 ConversationalRetrievalChain을 활용하여 추가적인 추상화 없이 직접 구현했습니다.
+            구성된 체인 함수
         """
-        logger.info("ConversationalRetrievalChain을 생성합니다...")
+        logger.info("RAG 체인 생성 시작...")
         
         # LLM 생성
         if self.llm is None:
             self.llm = self._create_llm()
         
-        # 메모리 생성
-        if self.memory is None:
-            self.memory = self._create_memory()
-        
         # 프롬프트 템플릿 생성
         prompts = self._create_prompt_templates()
+        qa_prompt = prompts["qa"]
         
         # 검색기 구성
         retriever = vectorstore.as_retriever(
@@ -152,48 +162,123 @@ class RAGChainBuilder:
             search_kwargs={"k": self.search_k}
         )
         
-        # RAG 체인 생성
-        self.chain = ConversationalRetrievalChain.from_llm(
-            llm=self.llm,
-            retriever=retriever,
-            memory=self.memory,
-            verbose=True,
-            combine_docs_chain_kwargs={"prompt": prompts["qa"]}
-        )
+        # LCEL 기반 RAG 체인 구성
+        def format_docs(docs):
+            return "\n\n".join([doc.page_content for doc in docs])
+        
+        # 문서 검색 및 응답 생성 파이프라인
+        # 메시지 히스토리를 문자열로 변환하는 함수 추가
+        def format_chat_history(chat_history):
+            if not chat_history:
+                return ""
+            formatted_history = ""
+            for message in chat_history:
+                if hasattr(message, 'content') and isinstance(message.content, str):
+                    if isinstance(message, HumanMessage):
+                        formatted_history += f"사용자: {message.content}\n"
+                    elif isinstance(message, AIMessage):
+                        formatted_history += f"AI: {message.content}\n"
+            return formatted_history
+            
+        # 기본 RAG 체인 구성 - 단순화
+        def run_rag_chain(query_text):
+            # 1. 문서 검색
+            docs = retriever.invoke(query_text)
+            context = format_docs(docs)
+            
+            # 2. 프롬프트 구성 및 LLM 요청
+            prompt_args = {"context": context, "question": query_text, "chat_history": ""}
+            chain_response = qa_prompt.format_messages(**prompt_args)
+            llm_response = self.llm.invoke(chain_response)
+            
+            # LLM 팩토리의 응답 처리기를 사용하여 모델별 응답 형식 차이 처리
+            return LLMFactory.process_response(self.llm_type, llm_response)
+        
+        # 메세지 히스토리를 처리하는 함수
+        def process_with_history(inputs, config=None):
+            if config is None:
+                config = {}
+                
+            session_id = config.get("configurable", {}).get("session_id", "default")
+            history = self.get_session_history(session_id)
+            query = ""
+            
+            try:
+                # 질문 추출
+                query = inputs.get("question", "")
+                if not query:
+                    return "질문이 없습니다."
+                
+                # 런너블 함수 실행
+                result = run_rag_chain(query)
+                
+                # 사용자 질문과 AI 응답 추가
+                history.add_messages([
+                    HumanMessage(content=query),
+                    AIMessage(content=result)
+                ])
+                
+                return result
+            except Exception as e:
+                logger.error(f"RAG 체인 실행 오류: {str(e)}")
+                logger.error(f"질문: {query}, 세션 ID: {session_id}")
+                
+                # 예외 발생 시 사용자에게 유용한 오류 메시지 반환
+                error_message = f"질문 처리 중 오류가 발생했습니다: {str(e)}"
+                return error_message
+        
+        # 메세지 히스토리를 관리하는 함수 설정
+        self.chain = process_with_history
         
         logger.info("RAG 체인 생성 완료")
         
         return self.chain
     
-    def run(self, query: str) -> Dict[str, Any]:
+    def run(self, query: str, session_id: str = "default") -> str:
         """
         RAG 체인을 실행하여 질문에 답변합니다.
         
         Args:
             query: 사용자 질문
+            session_id: 세션 ID, 기본값은 "default"
             
         Returns:
-            답변 결과 딕셔너리
+            답변 문자열
         """
         if self.chain is None:
             logger.error("RAG 체인이 생성되지 않았습니다. build() 메서드를 먼저 호출하세요.")
-            return {"answer": "시스템이 준비되지 않았습니다."}
+            return "시스템이 준비되지 않았습니다."
         
         try:
             # 체인 실행
-            result = self.chain({"question": query})
+            logger.info(f"질문 처리 시작: '{query}', 세션 ID: {session_id}")
+            result = self.chain(
+                {"question": query}, 
+                config={"configurable": {"session_id": session_id}}
+            )
+            logger.info(f"질문 처리 완료: '{query}'")
             return result
             
         except Exception as e:
-            logger.error(f"RAG 체인 실행 중 오류 발생: {str(e)}")
-            return {"answer": f"오류가 발생했습니다: {str(e)}"}
+            logger.error(f"RAG 체인 실행 오류: {str(e)}")
+            return f"오류가 발생했습니다: {str(e)}"
     
-    def reset_memory(self) -> None:
+    def reset_memory(self, session_id: str = "default") -> None:
         """
-        대화 메모리를 초기화합니다.
+        대화 메세지 히스토리를 초기화합니다.
+        
+        Args:
+            session_id: 초기화할 세션 ID, 기본값은 "default"
         """
-        if self.memory is not None:
-            self.memory.clear()
-            logger.info("대화 메모리가 초기화되었습니다.")
+        if session_id == "all":
+            # 모든 세션 초기화
+            self.session_histories.clear()
+            logger.info("모든 세션 히스토리 초기화 완료")
+        elif session_id in self.session_histories:
+            # 해당 세션만 초기화
+            self.session_histories[session_id].clear()
+            logger.info(f"세션 '{session_id}' 히스토리 초기화 완료")
         else:
-            logger.warning("초기화할 대화 메모리가 없습니다.")
+            # 세션이 없으면 새로 생성
+            self.session_histories[session_id] = InMemoryHistory(session_id=session_id)
+            logger.info(f"새 세션 '{session_id}' 생성 완료")

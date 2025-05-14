@@ -12,7 +12,7 @@ class DocumentAdapterError(Exception):
     """문서 어댑터 생성 중 발생하는 예외"""
     pass
 
-def get_document_adapter(file_extension: str, file_path: str) -> DocumentAdapter:
+def get_document_proc(file_extension: str, file_path: str) -> DocumentAdapter:
     """
     파일 확장자에 맞는 어댑터를 생성합니다.
     
