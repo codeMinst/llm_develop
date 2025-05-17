@@ -124,8 +124,12 @@ class DocumentLoader:
                     "source": str(file_path),
                     "file_type": file_ext.lstrip('.'),
                     "file_name": file_path.name
-                }
-                
+                }        
+                # 파일명이 요약문일 경우 summary_type 메타 추가
+                file_stem = file_path.stem.lower()
+                if file_stem in {"resume", "projects", "workstyle", "all"}:
+                    metadata["summary_type"] = file_stem
+
                 document = Document(page_content=processed_text, metadata=metadata)
                 documents.append(document)
                 

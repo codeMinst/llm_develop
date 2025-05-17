@@ -1,8 +1,9 @@
 """
 문서 처리 어댑터를 생성하는 팩토리 모듈입니다.
 """
-from rag_example.adapters.base.base import DocumentAdapter
+from rag_example.adapters.base.doc import DocumentAdapter
 from rag_example.adapters.document.pdf import PDFAdapter, PDFExtractor
+from rag_example.adapters.document.text import TextAdapter, TextExtractor
 from rag_example.utils.runner import Runner
 from rag_example.utils.text_preproc import improve_text, ollama_spacing
 from rag_example.utils.file_io import save_processed_text
@@ -32,7 +33,7 @@ def get_document_proc(file_extension: str, file_path: str) -> DocumentAdapter:
     file_extension = file_extension.lower()
     
     if file_extension == '.pdf':
-        adapter = PDFAdapter(
+        return PDFAdapter(
             file_path=file_path,
             pdf_extractor=Runner.wrap(PDFExtractor(mode="dict"), name="pdf_extractor"),
             text_improve=Runner.wrap(improve_text, name="text_improve"),
@@ -40,14 +41,16 @@ def get_document_proc(file_extension: str, file_path: str) -> DocumentAdapter:
             save_processed_text=Runner.wrap(save_processed_text, name="save_processed_text"),
             output_dir=PRE_PROC_DIR
         )
-        
-        return adapter
+    if file_extension == '.txt':
+        return TextAdapter(
+            file_path=file_path,
+            text_extractor=Runner.wrap(TextExtractor(mode="default"), name="text_extractor"),
+            save_processed_text=Runner.wrap(save_processed_text, name="save_processed_text"),
+            output_dir=PRE_PROC_DIR
+        )    
+    
+    raise DocumentAdapterError(f"지원하지 않는 파일 형식입니다: {file_extension}")
     
     # 향후 다른 문서 유형 지원을 위한 확장 포인트
-    # elif file_extension == '.docx':
+    # if file_extension == '.docx':
     #     return DocxAdapter()
-    # elif file_extension == '.txt':
-    #     return TextAdapter()
-    
-    # 지원하지 않는 파일 형식
-    raise DocumentAdapterError(f"지원하지 않는 파일 형식입니다: {file_extension}")

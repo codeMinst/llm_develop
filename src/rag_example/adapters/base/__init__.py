@@ -7,7 +7,7 @@
 - 문서 기능 처리기 인터페이스 정의
 - 문서 형식 타입 정의
 """
-from .base import DocumentAdapter
+from .doc import DocumentAdapter
 from .feature import DocumentFeatureProcessor
 from .types import DocumentType
 

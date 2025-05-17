@@ -10,7 +10,7 @@
 
 
 # 기본 인터페이스
-from .base.base import DocumentAdapter
+from .base.doc import DocumentAdapter
 
 # 어댑터
 from .document.pdf import PDFAdapter, PDFExtractor

@@ -2,13 +2,12 @@
 PDF 문서를 처리하는 어댑터 모듈입니다.
 """
 import logging
-import re
 from pathlib import Path
 from typing import Any, Optional
 
 import fitz   # PyMuPDF
 
-from rag_example.adapters.base.base import DocumentAdapter
+from rag_example.adapters.base.doc import DocumentAdapter
 from rag_example.adapters.base.feature import DocumentFeatureProcessor
 from rag_example.utils.runner import Runner
 
@@ -78,12 +77,6 @@ class PDFExtractor(DocumentFeatureProcessor):
         return page_text.strip()
 
     def get_feature_name(self) -> str:
-        """
-        처리하는 기능의 이름을 반환합니다.
-        
-        Returns:
-            기능 이름
-        """
         return "text_extractor"
 
 class PDFAdapter(DocumentAdapter):
@@ -159,8 +152,8 @@ class PDFAdapter(DocumentAdapter):
             logger.error(f"PDF 처리 중 오류 발생: {str(e)}")
             return f"PDF 처리 오류: {str(e)}"
 
-    
-    def supports(self, content_type: str) -> bool:
+    @staticmethod
+    def supports(content_type: str) -> bool:
         """
         PDF 문서 유형을 지원하는지 확인합니다.
         
