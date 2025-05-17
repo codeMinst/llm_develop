@@ -208,6 +208,6 @@ class RAGChainBuilder:
             logger.info("✅ 모든 세션 히스토리 초기화 완료")
             return
 
-        history = self._get_or_create_session_history(session_id)
+        history = self._get_session_history(session_id)
         history.clear()
         logger.info(f"✅ 세션 '{session_id}' 히스토리 초기화 완료")
