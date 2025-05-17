@@ -8,13 +8,15 @@
 import logging
 from typing import List, Optional
 
-from langchain_core.messages import AIMessage, HumanMessage, BaseMessage
+from langchain_core.messages import BaseMessage
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain.llms.base import BaseLLM
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger(__name__)
+from src.rag_example.pipeline.querying.prompts import get_summary_prompt
+from langchain_core.messages import HumanMessage, AIMessage
 
+logger = logging.getLogger(__name__)
 
 class SummarizingMemory(BaseChatMessageHistory, BaseModel):
     """
@@ -25,9 +27,14 @@ class SummarizingMemory(BaseChatMessageHistory, BaseModel):
     """
     messages: List[BaseMessage] = Field(default_factory=list)
     session_id: str = Field(default="default")
-    llm: Optional[BaseLLM] = None
     max_recent_turns: int = 4
     summary: str = ""
+    llm: Optional[BaseLLM] = Field(default=None)
+
+    def __init__(self, **kwargs):
+        llm = kwargs.pop("llm", None)
+        super().__init__(**kwargs)
+        self.llm = llm
 
     def add_messages(self, messages: List[BaseMessage]) -> None:
         """메세지 목록을 히스토리에 추가합니다."""
@@ -39,20 +46,24 @@ class SummarizingMemory(BaseChatMessageHistory, BaseModel):
         if len(self.messages) <= self.max_recent_turns * 2:
             return  # 충분히 짧음
 
-        # 오래된 메시지 요약
+        # 메시지 분할
         to_summarize = self.messages[:-self.max_recent_turns * 2]
         recent = self.messages[-self.max_recent_turns * 2:]
 
-        text = self._format_history(to_summarize)
-        summary_prompt = f"다음 대화를 요약해줘:\n{text}"
+        # 프롬프트 템플릿 적용
+        chat_history_text = self._format_history(to_summarize)
+        prompt_messages = get_summary_prompt().format_messages(chat_history=chat_history_text)
+
         if self.llm:
             try:
-                self.summary = self.llm.invoke(summary_prompt)
+                response = self.llm.invoke(prompt_messages)
+                self.summary = getattr(response, "content", str(response))
                 logger.info(f"대화 요약 완료 (요약 길이: {len(self.summary)}, 요약된 메시지 수: {len(to_summarize)})")
             except Exception as e:
                 logger.warning(f"요약 실패: {e}")
 
         self.messages = recent  # 최근 메시지만 유지
+
 
     def _format_history(self, msgs: List[BaseMessage]) -> str:
         """메시지 목록을 텍스트로 포맷팅합니다."""
