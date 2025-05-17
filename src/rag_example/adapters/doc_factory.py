@@ -2,7 +2,7 @@
 문서 처리 어댑터를 생성하는 팩토리 모듈입니다.
 """
 from rag_example.adapters.base.base import DocumentAdapter
-from rag_example.adapters.document.pdf import PDFAdapter, TextExtractor
+from rag_example.adapters.document.pdf import PDFAdapter, PDFExtractor
 from rag_example.utils.runner import Runner
 from rag_example.utils.text_preproc import improve_text, ollama_spacing
 from rag_example.utils.file_io import save_processed_text
@@ -34,7 +34,7 @@ def get_document_proc(file_extension: str, file_path: str) -> DocumentAdapter:
     if file_extension == '.pdf':
         adapter = PDFAdapter(
             file_path=file_path,
-            text_extractor=Runner.wrap(TextExtractor(mode="blocks"), name="text_extractor"),
+            pdf_extractor=Runner.wrap(PDFExtractor(mode="dict"), name="pdf_extractor"),
             text_improve=Runner.wrap(improve_text, name="text_improve"),
             ollama_spacing=Runner.wrap(False, name="ollama_spacing"),
             save_processed_text=Runner.wrap(save_processed_text, name="save_processed_text"),

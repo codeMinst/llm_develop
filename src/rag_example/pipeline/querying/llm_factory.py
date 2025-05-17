@@ -82,9 +82,9 @@ class VerboseCallbackHandler(BaseCallbackHandler):
     
     def on_llm_start(self, serialized, prompts, **kwargs):
         """LLM 시작 시 호출"""
-        logger.debug(f"\n\n==== LLM 요청 시작 ====")
+        logger.info(f"\n\n==== LLM 요청 시작 ====")
         for i, prompt in enumerate(prompts):
-            logger.debug(f"\n[요청 {i+1}]\n{prompt}\n")
+            logger.info(f"\n[요청 {i+1}]\n{prompt}\n")
     
     def on_llm_end(self, response, **kwargs):
         """LLM 종료 시 호출"""
@@ -122,9 +122,9 @@ class LLMFactory:
             ValueError: 지원하지 않는 LLM 타입인 경우
         """
         if llm_type.lower() == "ollama":
-            return LLMFactory._create_ollama(model_name, **kwargs)
+            return LLMFactory._create_ollama(**kwargs)
         elif llm_type.lower() == "claude":
-            return LLMFactory._create_claude(model_name, **kwargs)
+            return LLMFactory._create_claude(**kwargs)
         else:
             raise ValueError(f"지원하지 않는 LLM 타입입니다: {llm_type}")
     
@@ -165,19 +165,18 @@ class LLMFactory:
         return handler.process_response(response)
     
     @staticmethod
-    def _create_ollama(model_name: str, temperature: float = 0.1, **kwargs) -> Ollama:
+    def _create_ollama(temperature: float = 0.1, **kwargs) -> Ollama:
         """
         Ollama LLM을 생성합니다.
         
         Args:
-            model_name: 모델 이름 (예: "llama3")
             temperature: 온도 (0.0 ~ 1.0)
             **kwargs: 추가 매개변수
             
         Returns:
             생성된 Ollama LLM 객체
         """
-        logger.info(f"Ollama LLM 생성: {model_name}")
+        logger.info(f"Ollama LLM 생성: {OLLAMA_MODEL}")
         
         # 콜백 핸들러 설정
         callbacks = []
@@ -186,19 +185,18 @@ class LLMFactory:
             callbacks.append(VerboseCallbackHandler())
             
         return Ollama(
-            model=model_name, 
+            model=OLLAMA_MODEL, 
             verbose=IS_VERBOSE,
             callbacks=callbacks,
             temperature=temperature,
             **kwargs)
     
     @staticmethod
-    def _create_claude(model_name: str = CLAUDE_MODEL, temperature: float = 0.1, **kwargs) -> ChatAnthropic:
+    def _create_claude(temperature: float = 0.1, **kwargs) -> ChatAnthropic:
         """
         Claude LLM을 생성합니다.
         
         Args:
-            model_name: 모델 이름 (예: "claude-3-opus-20240229")
             temperature: 온도 (0.0 ~ 1.0)
             **kwargs: 추가 매개변수
             
@@ -206,9 +204,9 @@ class LLMFactory:
             생성된 Claude LLM 객체
         """
         if not CLAUDE_KEY:
-            raise ValueError("ANTHROPIC_API_KEY 환경 변수가 설정되지 않았습니다.")
+            raise ValueError("CLAUDE_KEY 환경 변수가 설정되지 않았습니다.")
         
-        logger.info(f"Claude LLM 생성: {model_name}")
+        logger.info(f"Claude LLM 생성: {CLAUDE_MODEL}")
         return ChatAnthropic(
             model=CLAUDE_MODEL,
             temperature=temperature,

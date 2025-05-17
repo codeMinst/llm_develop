@@ -14,7 +14,7 @@ PROCESSED_DATA_DIR = DATA_DIR / "processed"
 PRE_PROC_DIR = os.path.join(DATA_DIR, 'pre_proc')
 
 # 모델 설정
-LLM_TYPE = "ollama"
+LLM_TYPE = "claude"
 # API 키 가져오기
 # CLAUDE_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 CLAUDE_KEY = os.getenv("API_KEY")
@@ -31,11 +31,10 @@ EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2" 
 VECTORSTORE_PATH = PROCESSED_DATA_DIR / "chroma_db"
 
 # 청크 설정
-CHUNK_SIZE = 800  # 한글 기준 800자
-CHUNK_OVERLAP = 100
-CHUNK_SEPARATORS = ["--block start--", "\n\n","\n", ".", " ", ""]  # 청크 분할 시 사용할 구분자
+CHUNK_SIZE = 1000  # 한글 기준 800자
+CHUNK_OVERLAP = 150
+CHUNK_SEPARATORS = ["\n\n","\n", ".", " ", ""]  # 청크 분할 시 사용할 구분자
 
 # 검색 설정
-SEARCH_K = 3  # 검색할 문서 수
-
-
+SEARCH_K = 2  # 검색할 문서 수
+MAX_RECENT_TURNS = 3

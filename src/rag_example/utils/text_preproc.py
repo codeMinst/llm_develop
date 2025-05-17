@@ -78,8 +78,6 @@ def improve_text(text: str) -> str:
     Returns:
         개선된 텍스트
     """
-    # 페이지 태그 패턴 정의
-    page_tag_pattern = re.compile(r'-- \d+ page (start|end) --')
     try:
         # 줄 단위로 처리하여 줄바꿈 유지
         lines = text.split('\n')
@@ -93,7 +91,6 @@ def improve_text(text: str) -> str:
                 continue
                 
             # 한글과 영문/숫자/특수문자 사이에 공백 추가 (정규식 통합)
-            # 개선된 정규식 (괄호류, 백슬래시 제외)
             line = re.sub(r'([가-힣])([a-zA-Z0-9.,;:?!])', r'\1 \2', line)
             line = re.sub(r'([a-zA-Z0-9.,;:?!])([가-힣])', r'\1 \2', line)
             
@@ -105,33 +102,19 @@ def improve_text(text: str) -> str:
             
             improved_lines.append(line)
         
-        # 개선된 줄들을 다시 합치기
+        # 다시 하나의 텍스트로 결합
         result = '\n'.join(improved_lines)
         
-        # 페이지 태그가 사라졌는지 확인
-        result_lines = result.split('\n')
-        
-        # 원본 텍스트에서 페이지 태그와 위치 추출
-        original_lines = text.split('\n')
-        page_tags = []
-        
-        for i, line in enumerate(original_lines):
-            if page_tag_pattern.match(line.strip()):
-                page_tags.append((i, line))
-        
-        # 페이지 태그 다시 삽입
-        for idx, tag in page_tags:
-            # 원래 위치가 결과 범위를 벗어나지 않는지 확인
-            if idx < len(result_lines):
-                # 해당 위치에 페이지 태그가 없으면 삽입
-                if not page_tag_pattern.match(result_lines[idx].strip()):
-                    result_lines[idx] = tag
-            else:
-                # 원래 위치가 결과 범위를 벗어나면 마지막에 추가
-                result_lines.append(tag)
-        
-        # 페이지 태그 삽입 후 결과 반환
-        return '\n'.join(result_lines)
+        # # 추가: 개행 정리 (문단 수준)
+        # # 1. 정확히 2줄 개행은 → 1줄로 축소
+        # result = re.sub(r'(?<!\n)\n\n(?!\n)', '\n', result)
+        # # 2. 3줄 이상 개행은 → 2줄로 축소 (문단 의미 유지)
+        # result = re.sub(r'\n{3,}', '\n\n', result)
+        # 공백 포함한 여러 줄 개행 → 한 줄 개행으로 축소
+        # 완전히 한 줄로 줄이기
+        result = re.sub(r'((\s*\n){2,})', '\n', result)
+
+        return result.strip()
     
     except Exception as e:
         logger.error(f"텍스트 개선 중 오류 발생: {str(e)}")

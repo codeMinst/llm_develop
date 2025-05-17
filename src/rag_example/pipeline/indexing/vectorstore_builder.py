@@ -160,7 +160,8 @@ class VectorStoreBuilder:
         # Chroma 벡터 저장소 생성
         self.vectorstore = Chroma.from_documents(
             documents=sanitized_documents,
-            embedding=self.embeddings
+            embedding=self.embeddings,
+            collection_metadata={"hnsw:space": "cosine"}
             # persist_directory=self.vectorstore_dir
         )
         
