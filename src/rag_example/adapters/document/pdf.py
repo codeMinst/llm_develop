@@ -15,11 +15,12 @@ from rag_example.utils.runner import Runner
 # 로깅 설정
 logger = logging.getLogger(__name__)
 
-class TextExtractor(DocumentFeatureProcessor):
+class PDFExtractor(DocumentFeatureProcessor):
     """
     PDF 페이지에서 텍스트를 추출하는 기능을 제공합니다.
+    볼드체 텍스트는 마크다운 `**굵게**` 형식으로 감쌉니다.
     """
-    def __init__(self, mode: str, header_percent: float = 0.1, footer_percent: float = 0.1):
+    def __init__(self, mode: str = "dict", header_percent: float = 0.1, footer_percent: float = 0.1):
         super().__init__()
         self.mode = mode
         self.header_percent = header_percent
@@ -27,40 +28,54 @@ class TextExtractor(DocumentFeatureProcessor):
         
     def run(self, page: Any) -> str:
         """
-        페이지에서 텍스트를 추출합니다.
-        헤더/푸터 영역은 제외합니다.
+        페이지에서 텍스트를 추출합니다. 헤더/푸터 영역은 제외하고,
+        볼드체 텍스트는 `**텍스트**`로 감쌉니다.
         
         Args:
             page: PyMuPDF 페이지 객체
             
         Returns:
-            추출된 텍스트
+            추출된 텍스트 (마크다운 볼드 포함)
         """
-        # blocks 모드로 텍스트 추출
-        blocks = page.get_text(self.mode)
-        
-        # 헤더/푸터 영역 계산
+        text_dict = page.get_text(self.mode)
         page_height = page.rect.height
         header_zone = page_height * self.header_percent
         footer_zone = page_height * (1 - self.footer_percent)
-        
-        # 헤더/푸터 영역 외의 블록만 수집
-        page_text = ""
-        
-        for block in blocks:
-            # block 형식: (x0, y0, x1, y1, "텍스트", block_no, block_type)
-            y0 = block[1]  # 블록 상단 y 좌표
-            y1 = block[3]  # 블록 하단 y 좌표
-            
-            # 헤더/푸터 영역에 있는 블록은 제외
-            if y0 < header_zone or y1 > footer_zone:
-                continue
-                
-            # 텍스트 블록만 처리 (block_type == 0)
-            if block[6] == 0:
-                page_text += block[4] + "\n"
 
-        return page_text
+        page_text = ""
+        for block in text_dict.get("blocks", []):
+            for line in block.get("lines", []):
+                line_buffer = ""
+                bold_buffer = ""
+                is_in_bold = False
+
+                for span in line.get("spans", []):
+                    y0, y1 = span["bbox"][1], span["bbox"][3]
+                    if y0 < header_zone or y1 > footer_zone:
+                        continue
+
+                    font_name = span.get("font", "").lower()
+                    is_bold_span = "bold" in font_name or (span.get("flags", 0) & 2)
+                    text_piece = span.get("text", "")
+
+                    if is_bold_span:
+                        is_in_bold = True
+                        bold_buffer += text_piece
+                    else:
+                        if is_in_bold:
+                            # 볼드 종료 → strip 후 감싸기
+                            line_buffer += f"**{bold_buffer.strip()}**"
+                            bold_buffer = ""
+                            is_in_bold = False
+                        line_buffer += text_piece
+
+                # 줄 마지막에 볼드가 끝나지 않았으면 마무리
+                if is_in_bold and bold_buffer:
+                    line_buffer += f"**{bold_buffer.strip()}**"
+
+                page_text += line_buffer + "\n"
+
+        return page_text.strip()
 
     def get_feature_name(self) -> str:
         """
@@ -83,14 +98,14 @@ class PDFAdapter(DocumentAdapter):
     """
     def __init__(self, 
                  file_path: str,
-                 text_extractor: Runner,
+                 pdf_extractor: Runner,
                  text_improve: Runner,
                  ollama_spacing: Runner,
                  save_processed_text: Runner,
                  output_dir: Optional[str] = None):
         super().__init__()
         self.file_path = file_path
-        self.text_extractor = text_extractor
+        self.pdf_extractor = pdf_extractor
         self.text_improve = text_improve
         self.ollama_spacing = ollama_spacing
         self.save_processed_text = save_processed_text
@@ -98,49 +113,52 @@ class PDFAdapter(DocumentAdapter):
     
     def run(self) -> str:
         """
-        PDF 파일을 처리합니다.
+        PDF 파일을 처리하고, 페이지별로 제목과 페이지 번호를 포함한 텍스트를 생성합니다.
         
         Returns:
-            처리된 텍스트
+            처리된 전체 텍스트
         """
+        
         try:
-            # 파일 존재 여부 확인
-            if not Path(self.file_path).exists():
-                logger.error(f"PDF 파일이 존재하지 않습니다: {self.file_path}")
+            # 파일 존재 확인
+            file_path = Path(self.file_path)
+            if not file_path.exists():
+                logger.error(f"PDF 파일이 존재하지 않습니다: {file_path}")
                 return "문서를 찾을 수 없습니다."
-            logger.info(f"PDF 처리 시작: {self.file_path}")
-            
-            # PDF 파일 열기
-            doc = fitz.open(self.file_path)
+
+            logger.info(f"PDF 처리 시작: {file_path}")
+            doc = fitz.open(file_path)
             total_pages = len(doc)
             logger.info(f"PDF 파일 페이지 수: {total_pages}")
-            
-            # 각 페이지의 텍스트를 따로 추출하여 배열에 저장
-            processed_text = ""
-            page_start_tag = f"--block start--"
-            for page_num, page in enumerate(doc):
-                logger.debug(f"페이지 {page_num+1} 텍스트 추출 시작")   
-                # 블록 단위로 텍스트 추출 (헤더/푸터 제거)
-                page_text = self.text_extractor.run(page).strip()
-                # Ollama를 사용한 한국어 띄어쓰기 교정 적용
-                page_text = self.ollama_spacing.run(page_text)
-                # 페이지 시작 태그 추가 (태그 다음에 빈 행 추가)
-                page_text = re.sub(r'\n{2,}', '\n', page_text)
-                page_text += "\n\n"  
-                page_text = f"{page_start_tag}\n{page_text}" 
-                # 처리된 페이지 텍스트 추가
-                processed_text += page_text
-                logger.info(f"페이지 {page_num+1} 처리 완료 (길이: {len(processed_text)} 문자)")
 
-            processed_text = self.text_improve.run(processed_text)      
+            processed_text = ""
+            file_stem = file_path.stem
+
+            for page_num, page in enumerate(doc):
+                logger.debug(f"페이지 {page_num+1} 텍스트 추출 시작")
+
+                # 1. 텍스트 추출 + 전처리
+                page_text = self.pdf_extractor.run(page).strip()
+                page_text = self.ollama_spacing.run(page_text)
+
+                # 2. 페이지 제목 삽입
+                # header = f"### {file_stem} (페이지 {page_num + 1})\n"
+                # page_text = f"{header}{page_text}\n\n"
+
+                processed_text += page_text
+                logger.info(f"페이지 {page_num+1} 처리 완료 (누적 길이: {len(processed_text)}자)")
+
+            # 후처리 및 저장
+            processed_text = self.text_improve.run(processed_text)
             self.save_processed_text.run(self.file_path, self.output_dir, processed_text)
 
-            logger.info(f"PDF 처리 완료: {self.file_path} (추출된 텍스트 길이: {len(processed_text)} 문자)")
+            logger.info(f"PDF 처리 완료: {file_path} (최종 길이: {len(processed_text)}자)")
             return processed_text
-            
+
         except Exception as e:
             logger.error(f"PDF 처리 중 오류 발생: {str(e)}")
             return f"PDF 처리 오류: {str(e)}"
+
     
     def supports(self, content_type: str) -> bool:
         """

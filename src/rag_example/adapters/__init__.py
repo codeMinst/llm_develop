@@ -13,7 +13,7 @@
 from .base.base import DocumentAdapter
 
 # 어댑터
-from .document.pdf import PDFAdapter, TextExtractor
+from .document.pdf import PDFAdapter, PDFExtractor
 
 # 어댑터 팩토리
 from .doc_factory import get_document_proc, DocumentAdapterError

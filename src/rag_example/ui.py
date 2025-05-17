@@ -4,10 +4,7 @@
 RAG 시스템 웹 인터페이스 모듈
 """
 import gradio as gr
-import os
-import time
-import uuid
-import json
+import os, sys, time, uuid, json
 from dotenv import load_dotenv
 import logging
 from rag_example.pipeline.rag_pipeline import RAGPipeline
@@ -19,7 +16,16 @@ load_dotenv()
 # 토크나이저 병렬 처리 관련 경고 해결
 # 최신 버전에서는 명시적으로 환경 변수 설정 권장
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# 로깅 설정
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    force=True,
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler("rag_ui.log")
+    ]
+)
 logger = logging.getLogger(__name__)
 
 
@@ -365,9 +371,12 @@ def main():
     
     # 서버 시작 (인증 정보 적용)
     demo.launch(
+        server_name="0.0.0.0",
+        server_port=7860,
         share=False, 
         auth=auth, 
-        auth_message="LLM-Driven Profile System by NHS"
+        auth_message="LLM-Driven Profile System by NHS",
+        quiet=True  # Gradio 자체 로그 출력 최소화
     )
 
 if __name__ == "__main__":
