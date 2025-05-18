@@ -21,10 +21,11 @@ from langchain.llms.base import BaseLLM
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.chat_history import BaseChatMessageHistory
 
-from src.rag_example.config.settings import OLLAMA_MODEL, SEARCH_K, MAX_RECENT_TURNS
-from src.rag_example.pipeline.querying.prompts import get_condense_prompt, get_qa_prompt, PromptTemplate
-from src.rag_example.pipeline.querying.llm_factory import LLMFactory
-from src.rag_example.pipeline.summarizing_memory import SummarizingMemory
+from rag_example.config.settings import LLM_TYPE, MODEL_NAME, SEARCH_K, MAX_RECENT_TURNS
+from rag_example.pipeline.querying.prompts import get_condense_prompt, get_qa_prompt
+from rag_example.pipeline.querying.llm_factory import LLMFactory
+from rag_example.pipeline.summarizing_memory import SummarizingMemory
+from langchain_core.prompts import ChatPromptTemplate
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ class RAGChainBuilder:
     
     def __init__(self, 
                  llm_type: str = "ollama",
-                 model_name: str = OLLAMA_MODEL,
+                 model_name: str = "llama3.1",
                  search_k: int = SEARCH_K):
         """
         RAGChainBuilder 초기화
@@ -84,7 +85,7 @@ class RAGChainBuilder:
         except ValueError as e:
             logger.error(f"LLM 생성 실패: {str(e)}")
             logger.info(f"기본 Ollama LLM으로 대체합니다.")
-            return LLMFactory.create_llm("ollama", OLLAMA_MODEL, temperature=0.1)
+            return LLMFactory.create_llm("ollama", MODEL_NAME, temperature=0.1)
     
     def _get_session_history(self, session_id: str) -> BaseChatMessageHistory:
         """
@@ -112,7 +113,7 @@ class RAGChainBuilder:
         
         return self.session_histories[session_id]
     
-    def _create_prompt_templates(self) -> Dict[str, PromptTemplate]:
+    def _create_prompt_templates(self) -> Dict[str, ChatPromptTemplate]:
         """
         프롬프트 템플릿을 생성합니다.
         
@@ -131,7 +132,7 @@ class RAGChainBuilder:
     def _format_docs(self, docs):
         return "\n\n".join([doc.page_content for doc in docs])
 
-    def _run_rag(self, query_text: str, history: BaseChatMessageHistory, qa_prompt: PromptTemplate, retriever) -> str:
+    def _run_rag(self, query_text: str, history: BaseChatMessageHistory, qa_prompt: ChatPromptTemplate, retriever) -> str:
         docs = retriever.invoke(query_text)
         context = self._format_docs(docs)
         chat_history = history.load_summary_and_recent() if history else ""

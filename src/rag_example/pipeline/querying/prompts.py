@@ -1,7 +1,6 @@
 """
 프롬프트 템플릿을 관리하는 모듈입니다.
 """
-from langchain.prompts import PromptTemplate
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 
 def get_condense_prompt() -> ChatPromptTemplate:
@@ -75,4 +74,46 @@ def get_summary_prompt() -> ChatPromptTemplate:
     system_message_prompt = SystemMessagePromptTemplate.from_template(system_template)
     human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
 
+    return ChatPromptTemplate.from_messages([system_message_prompt, human_message_prompt])
+
+
+def get_summary_check_prompt() -> ChatPromptTemplate:
+    system_template = """다음 사용자 질문이 '정리된 형태의 요약 정보'를 원하는지 판단하세요.
+
+예를 들어 아래와 같은 질문은 모두 "YES"로 간주합니다:
+- 이력/경력 요약을 보고 싶어요
+- 핵심 프로젝트를 알려주세요
+- 어떤 방식으로 일하시는지 설명해주세요
+- 전체 경력을 간단히 정리해 주세요
+
+단순 정보 요청이나 특정 기술 질문은 "NO"입니다.
+
+반드시 "YES" 또는 "NO"로만 답변하세요."""
+    human_template = "{question}"
+
+    return ChatPromptTemplate.from_messages([
+        SystemMessagePromptTemplate.from_template(system_template),
+        HumanMessagePromptTemplate.from_template(human_template)
+    ])
+
+
+
+def get_summary_type_prompt() -> ChatPromptTemplate:
+    """
+    요약 질문인 경우, 어떤 종류의 요약을 요청하는지 분류하기 위한 프롬프트 템플릿입니다.
+    """
+    system_template = """아래 사용자 질문이 요청하는 요약의 종류를 판단하세요.
+
+선택 가능한 요약 유형:
+- resume: 이력서 중심 요약
+- projects: 주요 프로젝트 요약
+- workstyle: 업무 스타일 요약
+- all: 전체 요약
+- none: 어느 유형에도 해당하지 않음
+
+반드시 위 다섯 가지 중 하나로만 정확히 출력하세요."""
+    human_template = "{question}"
+
+    system_message_prompt = SystemMessagePromptTemplate.from_template(system_template)
+    human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
     return ChatPromptTemplate.from_messages([system_message_prompt, human_message_prompt])

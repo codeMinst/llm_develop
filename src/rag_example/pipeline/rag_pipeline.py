@@ -11,10 +11,11 @@ RAG 파이프라인 모듈
 """
 import logging
 import time
-
+from typing import Any
 from rag_example.pipeline.ingestion.document_loader import DocumentLoader
 from rag_example.pipeline.indexing.vectorstore_builder import VectorStoreBuilder
 from rag_example.pipeline.querying.rag_chain_builder import RAGChainBuilder
+from rag_example.pipeline.querying.graph_builder import GraphRAGChainBuilder
 from rag_example.config.settings import RAW_DATA_DIR, CHUNK_SIZE, CHUNK_OVERLAP
 
 logger = logging.getLogger(__name__)    
@@ -49,28 +50,27 @@ class RAGPipeline:
             chunk_size: 문서 청크 크기
             chunk_overlap: 문서 청크 간 겹침 크기
             is_clean_vectorstore: 기존 벡터 저장소를 삭제하고 새로 생성할지 여부
-            llm_type: 사용할 LLM 타입 ("ollama" 또는 "claude")
         """
         self.document_dir = document_dir
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.is_clean_vectorstore = is_clean_vectorstore
-        self.llm_type = llm_type
         
         # 파이프라인 컴포넌트 초기화
         # 각 컴포넌트는 특정 기능에 집중하며, 내부 구현 세부사항을 캡슐화합니다.
         # 이 방식은 불필요한 추상화를 피하고 LangChain 같은 라이브러리의 기능을 효과적으로 활용합니다.
         self.document_loader = DocumentLoader(document_dir)  # 문서 수집 및 처리 담당
         self.vectorstore_builder = VectorStoreBuilder()      # 벡터 저장소 생성 및 관리 담당
-        self.rag_chain_builder = RAGChainBuilder(llm_type=self.llm_type)  # 질의 처리 및 응답 생성 담당
+        self.chain_builder = GraphRAGChainBuilder(llm_type)  # 질의 처리 및 응답 생성 담당
         
         # 파이프라인 결과 저장 변수
         self.documents = None
         self.chunks = None
         self.vectorstore = None
         self.rag_chain = None
+        self.llm_type = llm_type
     
-    def setup_chain(self) -> RAGChainBuilder:
+    def setup_chain(self) -> Any:
         """
         전체 RAG 파이프라인을 통해 체인 생성
             
@@ -99,10 +99,10 @@ class RAGPipeline:
         # 3. RAG 체인 구성
         logger.info(f"RAG 체인 구성 단계 시작... (LLM 타입: {self.llm_type})")
         # RunnableWithMessageHistory 객체를 내부적으로 저장하고 RAGChainBuilder 인스턴스 반환
-        self.rag_chain_builder.build(self.vectorstore)
+        self.chain_builder.build(self.vectorstore)
         
         # 전체 시스템 준비 시간
         total_prep_time = time.time() - total_start_time
         logger.info(f"RAG 시스템 준비 완료 (총 준비 시간: {total_prep_time:.2f}초)")
         
-        return self.rag_chain_builder
+        return self.chain_builder

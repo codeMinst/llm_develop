@@ -14,13 +14,13 @@ PROCESSED_DATA_DIR = DATA_DIR / "processed"
 PRE_PROC_DIR = os.path.join(DATA_DIR, 'pre_proc')
 
 # 모델 설정
-LLM_TYPE = "ollama"
+LLM_TYPE = "claude"
 # API 키 가져오기
 # CLAUDE_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 CLAUDE_KEY = os.getenv("API_KEY")
 IS_VERBOSE = True
-OLLAMA_MODEL = "llama3.1"
-CLAUDE_MODEL = "claude-3-7-sonnet-20250219"  # Claude 모델 설정
+MODEL_NAME = "llama3.1" if LLM_TYPE == "ollama" else "claude-3-7-sonnet-20250219"
+
 
 # 임베딩 모델
 # EMBEDDING_MODEL = "all-MiniLM-L6-v2"  # 기존 모델
@@ -36,5 +36,5 @@ CHUNK_OVERLAP = 150
 CHUNK_SEPARATORS = ["\n\n","\n", ".", " ", ""]  # 청크 분할 시 사용할 구분자
 
 # 검색 설정
-SEARCH_K = 2  # 검색할 문서 수
+SEARCH_K = 3  # 검색할 문서 수
 MAX_RECENT_TURNS = 3

@@ -13,8 +13,8 @@ from langchain_community.llms import Ollama
 from langchain_anthropic import ChatAnthropic
 from langchain.callbacks import StdOutCallbackHandler
 from langchain.callbacks.base import BaseCallbackHandler
-from src.rag_example.config.settings import OLLAMA_MODEL, CLAUDE_KEY, CLAUDE_MODEL
-from src.rag_example.config.settings import IS_VERBOSE
+from src.rag_example.config.settings import MODEL_NAME, CLAUDE_KEY, IS_VERBOSE
+
 
 logger = logging.getLogger(__name__)
 
@@ -176,7 +176,7 @@ class LLMFactory:
         Returns:
             생성된 Ollama LLM 객체
         """
-        logger.info(f"Ollama LLM 생성: {OLLAMA_MODEL}")
+        logger.info(f"Ollama LLM 생성: {MODEL_NAME}")
         
         # 콜백 핸들러 설정
         callbacks = []
@@ -185,7 +185,7 @@ class LLMFactory:
             callbacks.append(VerboseCallbackHandler())
             
         return Ollama(
-            model=OLLAMA_MODEL, 
+            model=MODEL_NAME, 
             verbose=IS_VERBOSE,
             callbacks=callbacks,
             temperature=temperature,
@@ -206,9 +206,9 @@ class LLMFactory:
         if not CLAUDE_KEY:
             raise ValueError("CLAUDE_KEY 환경 변수가 설정되지 않았습니다.")
         
-        logger.info(f"Claude LLM 생성: {CLAUDE_MODEL}")
+        logger.info(f"Claude LLM 생성: {MODEL_NAME}")
         return ChatAnthropic(
-            model=CLAUDE_MODEL,
+            model=MODEL_NAME,
             temperature=temperature,
             verbose=IS_VERBOSE,
             anthropic_api_key=CLAUDE_KEY,
