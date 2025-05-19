@@ -180,12 +180,12 @@ class RAGUI:
                 logger.info(f"새 세션 생성: {self.session_id}")
             
             logger.info("대화 기록 초기화 완료")
-            return [], []
+            return [], ""
             
         except Exception as e:
             logger.error(f"대화 기록 초기화 중 오류 발생: {str(e)}")
             # 오류가 발생해도 대화는 초기화
-            return [], []
+            return [], ""
         
     def rebuild_vectorstore(self):
         """
