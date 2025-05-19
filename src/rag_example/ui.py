@@ -256,10 +256,10 @@ class RAGUI:
         Returns:
             Gradio 인터페이스
         """
-        with gr.Blocks(title="RAG 대화 시스템") as demo:
+        with gr.Blocks(title="LLMOps 개발/적용 대상 developer-info chat demo") as demo:
             with gr.Row():
-                gr.Markdown("# RAG 대화 시스템")
-            gr.Markdown("RAG를 활용한 질의응답 시스템입니다.")
+                gr.Markdown("# 🚀 LLMOps 개발/적용 대상 developer-info chat demo")
+            gr.Markdown("LangChain과 LangGraph를 활용한 구조적인 RAG 시스템으로, 문서를 처리하고 질의응답을 제공합니다.")
             
             with gr.Row():
                 with gr.Column(scale=2):
