@@ -16,7 +16,7 @@ PRE_PROC_DIR = os.path.join(DATA_DIR, 'pre_proc')
 # 모델 설정
 LLM_TYPE = "claude"
 # API 키 가져오기
-# CLAUDE_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+# CLAUDE_KEY = os.environ.get("API_KEY", "")
 CLAUDE_KEY = os.getenv("API_KEY")
 IS_VERBOSE = True
 MODEL_NAME = "llama3.1" if LLM_TYPE == "ollama" else "claude-3-7-sonnet-20250219"

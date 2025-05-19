@@ -400,7 +400,7 @@ def main():
     # 서버 시작 (인증 정보 적용)
     demo.launch(
         server_name="0.0.0.0",
-        server_port=7860,
+        server_port=53283,
         share=False, 
         auth=auth, 
         auth_message="LLM-Driven Profile System by NHS",
