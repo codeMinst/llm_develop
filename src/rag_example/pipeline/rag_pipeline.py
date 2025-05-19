@@ -26,16 +26,15 @@ class RAGPipeline:
     
     이 클래스는 다음 단계를 오케스트레이션합니다:
     1. 문서 로딩 및 전처리 (DocumentLoader)
-    2. 벡터 저장소 생성 (VectorStoreBuilder)
-    3. RAG 체인 구성 (RAGChainBuilder)
+    2. 벡터 저장소 생성 (VectorStoreBuilder) 
+    3. RAG 체인 구성 (GraphRAGChainBuilder)
     
     설계 의도:
-    - 파이프라인 컴포넌트들은 특정 프로세스를 캡슐화하고, 내부적으로 필요한 라이브러리를 조합해 사용합니다.
-    - 각 컴포넌트는 자신의 책임 영역 내에서 필요한 경우 어댑터 패턴 등을 활용할 수 있습니다.
-    - 파이프라인 자체는 높은 수준의 오케스트레이션에 집중하고, 세부 구현은 각 컴포넌트에 위임합니다.
-    - 이 접근 방식은 코드의 복잡성을 최소화하면서도 필요한 유연성을 제공합니다.
+    - 각 파이프라인 컴포넌트는 특정 기능을 캡슐화하고, 필요한 라이브러리를 내부적으로 활용합니다.
+    - 컴포넌트들은 각자의 책임 영역에서 독립적으로 동작하며 필요시 적절한 디자인 패턴을 적용합니다.
+    - 파이프라인은 전체 흐름 제어에 집중하고, 세부 구현은 각 컴포넌트에 위임합니다.
+    - 이 구조는 코드 복잡성을 관리하면서 확장성과 유연성을 제공합니다.
     """
-    
     def __init__(self, 
                  document_dir: str = RAW_DATA_DIR,
                  chunk_size: int = CHUNK_SIZE,
@@ -98,7 +97,7 @@ class RAGPipeline:
         
         # 3. RAG 체인 구성
         logger.info(f"RAG 체인 구성 단계 시작... (LLM 타입: {self.llm_type})")
-        # RunnableWithMessageHistory 객체를 내부적으로 저장하고 RAGChainBuilder 인스턴스 반환
+        # RunnableWithMessageHistory 객체를 내부적으로 저장하고 ChainBuilder 인스턴스 반환
         self.chain_builder.build(self.vectorstore)
         
         # 전체 시스템 준비 시간

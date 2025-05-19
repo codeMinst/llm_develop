@@ -7,8 +7,11 @@ import gradio as gr
 import os, sys, time, uuid, json
 from dotenv import load_dotenv
 import logging
+from collections import defaultdict
 from rag_example.pipeline.rag_pipeline import RAGPipeline
 from rag_example.config.settings import RAW_DATA_DIR, LLM_TYPE
+from rag_example.utils.constants import WELCOME_MESSAGES
+
 
 # .env 파일 로드
 load_dotenv()
@@ -23,10 +26,14 @@ logging.basicConfig(
     force=True,
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler("rag_ui.log")
+        logging.FileHandler("llm_ui.log")
     ]
 )
 logger = logging.getLogger(__name__)
+
+# IP 세션 추적 및 차단 리스트
+ip_sessions = defaultdict(list)
+banned_ips = set()
 
 
 class RAGUI:
@@ -41,15 +48,25 @@ class RAGUI:
         logger.info("RAG UI 초기화 중...")
         self.pipeline = None
         self.rag_chain = None
-        self.chat_history = []
-        
         # 사용자 세션 ID 관리 - UUID를 사용하여 고유한 세션 ID 생성
         self.session_id = self._generate_session_id()
         logger.info(f"새 세션 생성: {self.session_id}")
+
+        # 자주 묻는 질문 기반 초기 가이드 메시지
+        self.chat_history = WELCOME_MESSAGES
         
         # 파이프라인 초기화
         self.initialize_pipeline(clean_vectorstore=True)
-        
+
+    def _is_ip_blocked(self, ip):
+        return ip in banned_ips
+
+    def _register_ip(self, ip):
+        if ip:
+            ip_sessions[ip].append(time.time())
+            if len(ip_sessions[ip]) > 10:
+                banned_ips.add(ip)
+
     def _generate_session_id(self):
         """
         고유한 세션 ID를 생성합니다.
@@ -76,7 +93,7 @@ class RAGUI:
         self.rag_chain = self.pipeline.setup_chain()
         logger.info("RAG 파이프라인 초기화 완료")
         
-    def process_query(self, query, history):
+    def process_query(self, query, history, request: gr.Request = None):
         """
         사용자 질의 처리
         
@@ -90,7 +107,19 @@ class RAGUI:
         # 빈 질문 처리
         if not query or query.strip() == "":
             return "", history
-            
+        
+        request_ip = None
+        if request:
+            request_ip = request.client.host
+            self._register_ip(request_ip)
+            logger.info(f"요청 IP: {request_ip}")
+            if self._is_ip_blocked(request_ip):
+                history.append((
+                    query,
+                    "🚫 질문은 IP당 10개 이하만 하실 수 있습니다."
+                ))
+                return "", history
+    
         # 특별 명령 처리
         if query.lower() in ['reset', 'clear', '초기화', '리셋']:
             return self.reset_conversation(history)
@@ -361,7 +390,6 @@ def main():
     auth_users = os.getenv("AUTH_USERS")
     if auth_users:
         try:
-            # JSON 형식으로 파싱 (예: '[{"username":"user1","password":"pass1"},{"username":"user2","password":"pass2"}]')
             users_data = json.loads(auth_users)
             for user in users_data:
                 if isinstance(user, dict) and "username" in user and "password" in user:
