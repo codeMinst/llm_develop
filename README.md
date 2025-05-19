@@ -129,6 +129,10 @@ conda run -n test python -m src.rag_example.ui
   - 이미지, 오디오 등 다양한 형태의 데이터 처리 지원 확장
   - 이미지 분석 및 이해를 통한 멀티모달 RAG 시스템 구축
 
+
+
+
+
 --- 
 
 # 프로젝트 상세
